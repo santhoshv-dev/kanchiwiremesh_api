@@ -1,0 +1,26 @@
+@KanchimeshAPI_HostAddress = http://localhost:5185
+@adminEmail = {{ADMIN_EMAIL}}
+@adminPassword = {{ADMIN_PASSWORD}}
+@accessToken = {{ACCESS_TOKEN}}
+
+### Health
+GET {{KanchimeshAPI_HostAddress}}/health
+
+### Authenticated dashboard
+GET {{KanchimeshAPI_HostAddress}}/api/dashboard
+Authorization: Bearer {{accessToken}}
+
+### Customers
+GET {{KanchimeshAPI_HostAddress}}/api/customers?pageSize=20
+Authorization: Bearer {{accessToken}}
+
+### Login
+POST {{KanchimeshAPI_HostAddress}}/api/auth/login
+Content-Type: application/json
+
+{
+  "emailOrPhone": "{{adminEmail}}",
+  "password": "{{adminPassword}}"
+}
+
+###

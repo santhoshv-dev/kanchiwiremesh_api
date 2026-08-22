@@ -1,0 +1,9 @@
+# Runtime-only configuration and local developer secrets
+appsettings.Local.json
+appsettings.*.Local.json
+key.properties
+
+# Local EF Core tool cache and build output
+.tool-data/
+bin/
+obj/
