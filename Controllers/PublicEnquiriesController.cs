@@ -43,6 +43,15 @@ public sealed class PublicEnquiriesController(
             }
         }
 
+        var email = NullIfWhiteSpace(request.Email);
+        var emailDeliveryStatus = email is null
+            ? EmailDeliveryStatuses.NotRequested
+            : emailSender.IsReady
+                ? EmailDeliveryStatuses.Queued
+                : emailSender.IsDeliveryEnabled
+                    ? EmailDeliveryStatuses.Failed
+                    : EmailDeliveryStatuses.Disabled;
+
         var enquiry = new Enquiry
         {
             EnquiryNumber = DocumentNumbers.New("ENQ"),
@@ -50,17 +59,13 @@ public sealed class PublicEnquiriesController(
             ContactName = request.ContactName.Trim(),
             CompanyName = NullIfWhiteSpace(request.CompanyName),
             Phone = request.Phone.Trim(),
-            Email = request.Email.Trim(),
+            Email = email,
             ProductRequirement = NullIfWhiteSpace(request.ProductRequirement),
             Quantity = request.Quantity,
             Unit = NullIfWhiteSpace(request.Unit),
             Message = NullIfWhiteSpace(request.Message),
             Status = "New",
-            EmailDeliveryStatus = emailSender.IsReady
-                ? EmailDeliveryStatuses.Queued
-                : emailSender.IsDeliveryEnabled
-                    ? EmailDeliveryStatuses.Failed
-                    : EmailDeliveryStatuses.Disabled,
+            EmailDeliveryStatus = emailDeliveryStatus,
         };
 
         database.Enquiries.Add(enquiry);
@@ -75,12 +80,15 @@ public sealed class PublicEnquiriesController(
 
         if (emailSender.IsReady)
         {
-            database.EmailDeliveryJobs.Add(new EmailDeliveryJob
+            if (enquiry.Email is not null)
             {
-                EnquiryId = enquiry.Id,
-                Kind = EmailDeliveryJobKinds.CustomerConfirmation,
-                Recipient = enquiry.Email!,
-            });
+                database.EmailDeliveryJobs.Add(new EmailDeliveryJob
+                {
+                    EnquiryId = enquiry.Id,
+                    Kind = EmailDeliveryJobKinds.CustomerConfirmation,
+                    Recipient = enquiry.Email,
+                });
+            }
 
             foreach (var administratorRecipient in emailSender.AdminRecipients)
             {

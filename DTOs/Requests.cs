@@ -94,7 +94,7 @@ public sealed class PublicEnquiryRequest
     [Required, StringLength(150)] public string ContactName { get; init; } = string.Empty;
     [StringLength(180)] public string? CompanyName { get; init; }
     [Required, StringLength(25, MinimumLength = 7)] public string Phone { get; init; } = string.Empty;
-    [Required, EmailAddress, StringLength(254)] public string Email { get; init; } = string.Empty;
+    [EmailAddress, StringLength(254)] public string? Email { get; init; }
     [StringLength(300)] public string? ProductRequirement { get; init; }
     [Range(typeof(decimal), "0.001", "999999999999999")] public decimal? Quantity { get; init; }
     [StringLength(30)] public string? Unit { get; init; }
