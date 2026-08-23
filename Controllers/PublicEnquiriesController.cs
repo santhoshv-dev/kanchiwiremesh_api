@@ -44,9 +44,10 @@ public sealed class PublicEnquiriesController(
         }
 
         var email = NullIfWhiteSpace(request.Email);
+        var canDispatchEmail = emailSender.IsDeliveryEnabled && emailSender.IsReady;
         var emailDeliveryStatus = email is null
             ? EmailDeliveryStatuses.NotRequested
-            : emailSender.IsReady
+            : canDispatchEmail
                 ? EmailDeliveryStatuses.Queued
                 : emailSender.IsDeliveryEnabled
                     ? EmailDeliveryStatuses.Failed
@@ -78,7 +79,7 @@ public sealed class PublicEnquiriesController(
             RelatedCustomerId = enquiry.CustomerId,
         });
 
-        if (emailSender.IsReady)
+        if (canDispatchEmail)
         {
             if (enquiry.Email is not null)
             {

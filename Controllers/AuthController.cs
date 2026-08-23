@@ -7,11 +7,8 @@ using KanchimeshAPI.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Options;
-using System.Net.Mail;
-using System.Net;
-using System.Text.Encodings.Web;
 
 namespace KanchimeshAPI.Controllers;
 
@@ -20,7 +17,7 @@ public sealed class AuthController(
     KanchimeshDbContext database,
     IPasswordHasher<ApplicationUser> passwordHasher,
     IJwtTokenService tokenService,
-    IOptions<SmtpEmailOptions> emailOptions,
+    IAccountCredentialEmailSender accountEmailSender,
     ILogger<AuthController> logger) : ApiControllerBase
 {
     [AllowAnonymous]
@@ -110,6 +107,7 @@ public sealed class AuthController(
     }
 
     [AllowAnonymous]
+    [EnableRateLimiting(RateLimitPolicies.PasswordResets)]
     [HttpPost("forgot-password")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
@@ -125,58 +123,26 @@ public sealed class AuthController(
         }
 
         var newPassword = Guid.NewGuid().ToString("N")[..12] + "Aa1!";
+        var delivered = await accountEmailSender.SendPasswordResetAsync(
+            user.Email,
+            user.DisplayName,
+            newPassword,
+            cancellationToken);
+        if (!delivered)
+        {
+            // Keep the response generic so callers cannot discover whether an
+            // account exists, but never invalidate a password without a sent
+            // credential email.
+            SafeLog(() => logger.LogWarning(
+                "Password reset credentials were not changed because email delivery failed for {Email}.",
+                user.Email));
+            return Ok();
+        }
+
         user.PasswordHash = passwordHasher.HashPassword(user, newPassword);
         user.MustChangePassword = true;
         await database.SaveChangesAsync(cancellationToken);
-
-        // Send email with credentials
-        var options = emailOptions.Value;
-        if (options.Enabled)
-        {
-            try
-            {
-                var message = new MailMessage
-                {
-                    From = string.IsNullOrWhiteSpace(options.FromName)
-                        ? new MailAddress(options.FromAddress.Trim())
-                        : new MailAddress(options.FromAddress.Trim(), options.FromName.Trim()),
-                    Subject = "Your Temporary Password",
-                    IsBodyHtml = true,
-                };
-                message.To.Add(new MailAddress(user.Email));
-
-                var logoHtml = string.Empty;
-                if (options.TryGetBrandLogoUrl(out var logoUrl))
-                {
-                    logoHtml = $"<img src=\"{HtmlEncoder.Default.Encode(logoUrl)}\" alt=\"Logo\" style=\"display:block;max-width:180px;height:auto;margin-bottom:20px;\" />";
-                }
-
-                message.Body = $"""
-                    <!doctype html>
-                    <html lang="en">
-                      <body style="margin:0;padding:20px;font-family:sans-serif;">
-                        {logoHtml}
-                        <p>Hello {HtmlEncoder.Default.Encode(user.DisplayName)},</p>
-                        <p>A password reset has been requested for your account.</p>
-                        <p><strong>Your Temporary Password:</strong> {HtmlEncoder.Default.Encode(newPassword)}</p>
-                        <p>Please log in and update your password immediately from the Settings page.</p>
-                      </body>
-                    </html>
-                    """;
-
-                using var client = new SmtpClient(options.Host.Trim(), options.Port)
-                {
-                    EnableSsl = options.UseSsl,
-                    UseDefaultCredentials = false,
-                    Credentials = new NetworkCredential(options.Username, options.Password),
-                };
-                await client.SendMailAsync(message, cancellationToken);
-            }
-            catch (Exception ex)
-            {
-                logger.LogError(ex, "Failed to send reset email to {Email}", user.Email);
-            }
-        }
+        SafeLog(() => logger.LogInformation("A password reset was completed for an application user."));
         return Ok();
     }
 
@@ -219,4 +185,16 @@ public sealed class AuthController(
         });
 
     private static string NormalizeEmail(string email) => email.Trim().ToUpperInvariant();
+
+    private static void SafeLog(Action writeLog)
+    {
+        try
+        {
+            writeLog();
+        }
+        catch
+        {
+            // A broken host log sink must not change the endpoint response.
+        }
+    }
 }

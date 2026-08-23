@@ -6,11 +6,8 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Options;
-using System.Net.Mail;
-using System.Net;
-using System.Text.Encodings.Web;
 using KanchimeshAPI.Services;
+using System.ComponentModel.DataAnnotations;
 
 namespace KanchimeshAPI.Controllers;
 
@@ -19,15 +16,23 @@ namespace KanchimeshAPI.Controllers;
 public sealed class UsersController(
     KanchimeshDbContext database,
     IPasswordHasher<ApplicationUser> passwordHasher,
-    IOptions<SmtpEmailOptions> emailOptions,
+    IAccountCredentialEmailSender accountEmailSender,
     ILogger<UsersController> logger) : ApiControllerBase
 {
     [HttpPost]
     [ProducesResponseType(StatusCodes.Status201Created)]
     [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status503ServiceUnavailable)]
     public async Task<ActionResult> CreateUser(CreateUserRequest request, CancellationToken cancellationToken)
     {
-        var normalizedEmail = request.Email.Trim().ToUpperInvariant();
+        var email = request.Email.Trim();
+        var displayName = request.DisplayName.Trim();
+        if (string.IsNullOrWhiteSpace(displayName))
+        {
+            return ValidationError(nameof(request.DisplayName), "Display name is required.");
+        }
+
+        var normalizedEmail = email.ToUpperInvariant();
         var exists = await database.ApplicationUsers.AnyAsync(u => u.NormalizedEmail == normalizedEmail, cancellationToken);
         if (exists)
         {
@@ -37,68 +42,33 @@ public sealed class UsersController(
         var password = GenerateRandomPassword();
         var user = new ApplicationUser
         {
-            Email = request.Email.Trim(),
+            Email = email,
             NormalizedEmail = normalizedEmail,
-            DisplayName = request.DisplayName.Trim(),
+            DisplayName = displayName,
             Role = ApplicationRoles.Administrator,
             MustChangePassword = true,
             IsActive = true
         };
         user.PasswordHash = passwordHasher.HashPassword(user, password);
 
-        database.ApplicationUsers.Add(user);
-        await database.SaveChangesAsync(cancellationToken);
-
-        // Send email with credentials
-        var options = emailOptions.Value;
-        if (options.Enabled)
+        var delivered = await accountEmailSender.SendAdministratorCredentialsAsync(
+            user.Email,
+            user.DisplayName,
+            password,
+            cancellationToken);
+        if (!delivered)
         {
-            try
-            {
-                var message = new MailMessage
-                {
-                    From = string.IsNullOrWhiteSpace(options.FromName) 
-                        ? new MailAddress(options.FromAddress.Trim()) 
-                        : new MailAddress(options.FromAddress.Trim(), options.FromName.Trim()),
-                    Subject = "Your Admin Credentials",
-                    IsBodyHtml = true,
-                };
-                message.To.Add(new MailAddress(user.Email));
-                
-                var logoHtml = string.Empty;
-                if (options.TryGetBrandLogoUrl(out var logoUrl))
-                {
-                    logoHtml = $"<img src=\"{HtmlEncoder.Default.Encode(logoUrl)}\" alt=\"Logo\" style=\"display:block;max-width:180px;height:auto;margin-bottom:20px;\" />";
-                }
-
-                message.Body = $"""
-                    <!doctype html>
-                    <html lang="en">
-                      <body style="margin:0;padding:20px;font-family:sans-serif;">
-                        {logoHtml}
-                        <p>Hello {HtmlEncoder.Default.Encode(user.DisplayName)},</p>
-                        <p>An administrator account has been created for you.</p>
-                        <p><strong>Email:</strong> {HtmlEncoder.Default.Encode(user.Email)}<br/>
-                        <strong>Password:</strong> {HtmlEncoder.Default.Encode(password)}</p>
-                        <p>Please log in and change your password.</p>
-                      </body>
-                    </html>
-                    """;
-
-                using var client = new SmtpClient(options.Host.Trim(), options.Port)
-                {
-                    EnableSsl = options.UseSsl,
-                    UseDefaultCredentials = false,
-                    Credentials = new NetworkCredential(options.Username, options.Password),
-                };
-                await client.SendMailAsync(message, cancellationToken);
-            }
-            catch (Exception ex)
-            {
-                logger.LogError(ex, "Failed to send credentials email to {Email}", user.Email);
-            }
+            SafeLog(() => logger.LogWarning(
+                "Administrator account creation was not persisted because the credential email failed for {Email}.",
+                user.Email));
+            return Problem(
+                statusCode: StatusCodes.Status503ServiceUnavailable,
+                title: "Credential email could not be sent.",
+                detail: "Check the SMTP configuration and try again.");
         }
 
+        database.ApplicationUsers.Add(user);
+        await database.SaveChangesAsync(cancellationToken);
         return StatusCode(StatusCodes.Status201Created);
     }
 
@@ -124,6 +94,20 @@ public sealed class UsersController(
     {
         return Guid.NewGuid().ToString("N")[..12] + "Aa1!";
     }
+
+    private static void SafeLog(Action writeLog)
+    {
+        try
+        {
+            writeLog();
+        }
+        catch
+        {
+            // A broken host log sink must not change account creation.
+        }
+    }
 }
 
-public sealed record CreateUserRequest(string Email, string DisplayName);
+public sealed record CreateUserRequest(
+    [param: Required, EmailAddress, StringLength(254)] string Email,
+    [param: Required, StringLength(150)] string DisplayName);
