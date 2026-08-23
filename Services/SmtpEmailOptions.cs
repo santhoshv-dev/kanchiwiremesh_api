@@ -4,7 +4,7 @@ namespace KanchimeshAPI.Services;
 
 public sealed class SmtpEmailOptions
 {
-    public const string SectionName = "Smtp";
+    public const string SectionName = "Email:Smtp";
 
     public bool Enabled { get; set; } = true;
     public string Host { get; set; } = string.Empty;

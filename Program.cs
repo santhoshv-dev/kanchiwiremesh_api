@@ -185,6 +185,7 @@ if (!app.Environment.IsDevelopment())
 {
     app.UseHttpsRedirection();
 }
+app.UseStaticFiles();
 app.UseCors(flutterCorsPolicy);
 app.UseRateLimiter();
 app.UseAuthentication();

@@ -8,6 +8,10 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
+using System.Net.Mail;
+using System.Net;
+using System.Text.Encodings.Web;
 
 namespace KanchimeshAPI.Controllers;
 
@@ -16,6 +20,7 @@ public sealed class AuthController(
     KanchimeshDbContext database,
     IPasswordHasher<ApplicationUser> passwordHasher,
     IJwtTokenService tokenService,
+    IOptions<SmtpEmailOptions> emailOptions,
     ILogger<AuthController> logger) : ApiControllerBase
 {
     [AllowAnonymous]
@@ -102,6 +107,77 @@ public sealed class AuthController(
         await database.SaveChangesAsync(cancellationToken);
         logger.LogInformation("An application user changed their password.");
         return Ok(CreateLoginResponse(user));
+    }
+
+    [AllowAnonymous]
+    [HttpPost("forgot-password")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
+    public async Task<ActionResult> ForgotPassword(ForgotPasswordRequest request, CancellationToken cancellationToken)
+    {
+        var normalizedEmail = NormalizeEmail(request.Email);
+        var user = await database.ApplicationUsers
+            .SingleOrDefaultAsync(item => item.NormalizedEmail == normalizedEmail, cancellationToken);
+        if (user is null || !user.IsActive)
+        {
+            // Do not leak if the email exists, just return ok
+            return Ok();
+        }
+
+        var newPassword = Guid.NewGuid().ToString("N")[..12] + "Aa1!";
+        user.PasswordHash = passwordHasher.HashPassword(user, newPassword);
+        user.MustChangePassword = true;
+        await database.SaveChangesAsync(cancellationToken);
+
+        // Send email with credentials
+        var options = emailOptions.Value;
+        if (options.Enabled)
+        {
+            try
+            {
+                var message = new MailMessage
+                {
+                    From = string.IsNullOrWhiteSpace(options.FromName)
+                        ? new MailAddress(options.FromAddress.Trim())
+                        : new MailAddress(options.FromAddress.Trim(), options.FromName.Trim()),
+                    Subject = "Your Temporary Password",
+                    IsBodyHtml = true,
+                };
+                message.To.Add(new MailAddress(user.Email));
+
+                var logoHtml = string.Empty;
+                if (options.TryGetBrandLogoUrl(out var logoUrl))
+                {
+                    logoHtml = $"<img src=\"{HtmlEncoder.Default.Encode(logoUrl)}\" alt=\"Logo\" style=\"display:block;max-width:180px;height:auto;margin-bottom:20px;\" />";
+                }
+
+                message.Body = $"""
+                    <!doctype html>
+                    <html lang="en">
+                      <body style="margin:0;padding:20px;font-family:sans-serif;">
+                        {logoHtml}
+                        <p>Hello {HtmlEncoder.Default.Encode(user.DisplayName)},</p>
+                        <p>A password reset has been requested for your account.</p>
+                        <p><strong>Your Temporary Password:</strong> {HtmlEncoder.Default.Encode(newPassword)}</p>
+                        <p>Please log in and update your password immediately from the Settings page.</p>
+                      </body>
+                    </html>
+                    """;
+
+                using var client = new SmtpClient(options.Host.Trim(), options.Port)
+                {
+                    EnableSsl = options.UseSsl,
+                    UseDefaultCredentials = false,
+                    Credentials = new NetworkCredential(options.Username, options.Password),
+                };
+                await client.SendMailAsync(message, cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Failed to send reset email to {Email}", user.Email);
+            }
+        }
+        return Ok();
     }
 
     private async Task<ApplicationUser?> FindCurrentUserAsync(CancellationToken cancellationToken)

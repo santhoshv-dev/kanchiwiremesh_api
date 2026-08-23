@@ -1,5 +1,7 @@
+using System.IO;
 using System.Net;
 using System.Net.Mail;
+using System.Net.Mime;
 using System.Text;
 using System.Text.Encodings.Web;
 using KanchimeshAPI.Models;
@@ -36,13 +38,16 @@ public sealed class SmtpEnquiryEmailSender : IEnquiryEmailSender
 {
     private readonly SmtpEmailOptions _options;
     private readonly ILogger<SmtpEnquiryEmailSender> _logger;
+    private readonly IHostEnvironment _environment;
 
     public SmtpEnquiryEmailSender(
         IOptions<SmtpEmailOptions> options,
-        ILogger<SmtpEnquiryEmailSender> logger)
+        ILogger<SmtpEnquiryEmailSender> logger,
+        IHostEnvironment environment)
     {
         _options = options.Value;
         _logger = logger;
+        _environment = environment;
         AdminRecipients = _options.GetValidAdminRecipients();
         IsReady = _options.IsReady(out var configurationError);
 
@@ -173,21 +178,58 @@ public sealed class SmtpEnquiryEmailSender : IEnquiryEmailSender
                 ? $"We received your enquiry {enquiry.EnquiryNumber}"
                 : $"New enquiry {enquiry.EnquiryNumber} from {enquiry.ContactName}",
             SubjectEncoding = Encoding.UTF8,
-            Body = isCustomerConfirmation ? BuildCustomerHtml(enquiry) : BuildAdministratorHtml(enquiry),
             BodyEncoding = Encoding.UTF8,
             IsBodyHtml = true,
         };
         message.To.Add(new MailAddress(job.Recipient));
-        message.AlternateViews.Add(AlternateView.CreateAlternateViewFromString(
-            isCustomerConfirmation ? BuildCustomerPlainText(enquiry) : BuildAdministratorPlainText(enquiry),
-            Encoding.UTF8,
-            "text/plain"));
 
         if (isAdminNotification && TryCreateReplyToAddress(enquiry.Email, out var replyToAddress))
         {
             message.ReplyToList.Add(replyToAddress);
         }
 
+        var templateName = isCustomerConfirmation ? "CustomerConfirmation.html" : "AdminNotification.html";
+        var templatePath = Path.Combine(_environment.ContentRootPath, "EmailTemplates", templateName);
+        var htmlBody = File.ReadAllText(templatePath, Encoding.UTF8);
+
+        htmlBody = htmlBody.Replace("{{ContactName}}", Html(enquiry.ContactName));
+        htmlBody = htmlBody.Replace("{{EnquiryNumber}}", Html(enquiry.EnquiryNumber));
+        htmlBody = htmlBody.Replace("{{ProductRequirement}}", Html(enquiry.ProductRequirement ?? "your requirement"));
+        htmlBody = htmlBody.Replace("{{Year}}", DateTime.Now.Year.ToString());
+
+        if (isAdminNotification)
+        {
+            var rows = new List<(string Label, string? Value)>
+            {
+                ("Contact", enquiry.ContactName),
+                ("Company", enquiry.CompanyName),
+                ("Phone", enquiry.Phone),
+                ("Email", enquiry.Email),
+                ("Requirement", enquiry.ProductRequirement),
+                ("Quantity", enquiry.Quantity?.ToString("0.###")),
+                ("Unit", enquiry.Unit),
+                ("Message", enquiry.Message),
+            };
+            var tableRows = string.Concat(rows
+                .Where(row => !string.IsNullOrWhiteSpace(row.Value))
+                .Select(row => $"<tr><th style=\"padding:8px 12px;text-align:left;color:#475569;font-size:13px;border-bottom:1px solid #e2e8f0;vertical-align:top;\">{Html(row.Label)}</th><td style=\"padding:8px 12px;color:#0f172a;font-size:14px;border-bottom:1px solid #e2e8f0;white-space:pre-wrap;\">{HtmlWithBreaks(row.Value)}</td></tr>"));
+            htmlBody = htmlBody.Replace("{{TableRows}}", tableRows);
+        }
+
+        var htmlView = AlternateView.CreateAlternateViewFromString(htmlBody, Encoding.UTF8, MediaTypeNames.Text.Html);
+
+        var logoPath = Path.Combine(_environment.ContentRootPath, "wwwroot", "images", "erp_logo-transparent.png");
+        if (File.Exists(logoPath))
+        {
+            var logoResource = new LinkedResource(logoPath, "image/png")
+            {
+                ContentId = "brandlogo",
+                TransferEncoding = TransferEncoding.Base64
+            };
+            htmlView.LinkedResources.Add(logoResource);
+        }
+
+        message.AlternateViews.Add(htmlView);
         return message;
     }
 
@@ -214,102 +256,6 @@ public sealed class SmtpEnquiryEmailSender : IEnquiryEmailSender
         }
     }
 
-    private string BuildCustomerHtml(Enquiry enquiry)
-    {
-        var product = string.IsNullOrWhiteSpace(enquiry.ProductRequirement)
-            ? "your requirement"
-            : enquiry.ProductRequirement;
-        return BuildBrandedHtml(
-            $"<p>Hello {Html(enquiry.ContactName)},</p>" +
-            $"<p>Thank you for contacting Kanchi Wire Mesh. We have received your enquiry for <strong>{Html(product)}</strong>.</p>" +
-            ReferenceCard(enquiry.EnquiryNumber) +
-            "<p>Our team will review the details and contact you using the information you provided.</p>",
-            "Thank you for choosing Kanchi Wire Mesh.");
-    }
-
-    private string BuildAdministratorHtml(Enquiry enquiry)
-    {
-        var rows = new List<(string Label, string? Value)>
-        {
-            ("Contact", enquiry.ContactName),
-            ("Company", enquiry.CompanyName),
-            ("Phone", enquiry.Phone),
-            ("Email", enquiry.Email),
-            ("Requirement", enquiry.ProductRequirement),
-            ("Quantity", enquiry.Quantity?.ToString("0.###")),
-            ("Unit", enquiry.Unit),
-            ("Message", enquiry.Message),
-        };
-        var tableRows = string.Concat(rows
-            .Where(row => !string.IsNullOrWhiteSpace(row.Value))
-            .Select(row => $"<tr><th style=\"padding:8px 12px;text-align:left;color:#475569;font-size:13px;border-bottom:1px solid #e2e8f0;vertical-align:top;\">{Html(row.Label)}</th><td style=\"padding:8px 12px;color:#0f172a;font-size:14px;border-bottom:1px solid #e2e8f0;white-space:pre-wrap;\">{HtmlWithBreaks(row.Value)}</td></tr>"));
-
-        return BuildBrandedHtml(
-            $"<p>A new public enquiry has been received from <strong>{Html(enquiry.ContactName)}</strong>.</p>" +
-            ReferenceCard(enquiry.EnquiryNumber) +
-            $"<table role=\"presentation\" cellspacing=\"0\" cellpadding=\"0\" style=\"border-collapse:collapse;width:100%;margin-top:20px;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;\"><tbody>{tableRows}</tbody></table>",
-            "Reply to this email to contact the customer directly.");
-    }
-
-    private string BuildBrandedHtml(string content, string footer)
-    {
-        var header = _options.TryGetBrandLogoUrl(out var logoUrl)
-            ? $"<img src=\"{Html(logoUrl)}\" alt=\"Kanchi Wire Mesh\" style=\"display:block;max-width:180px;max-height:72px;width:auto;height:auto;\" />"
-            : "<div style=\"font-size:21px;font-weight:800;letter-spacing:.2px;color:#0f172a;\">Kanchi Wire Mesh</div>";
-
-        return $"""
-            <!doctype html>
-            <html lang="en">
-              <body style="margin:0;padding:0;background:#f1f5f9;font-family:Arial,Helvetica,sans-serif;color:#0f172a;">
-                <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#f1f5f9;padding:28px 12px;">
-                  <tr><td align="center">
-                    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:620px;background:#ffffff;border-radius:14px;overflow:hidden;box-shadow:0 2px 9px rgba(15,23,42,.08);">
-                      <tr><td style="padding:26px 28px 20px;border-bottom:4px solid #0f766e;">{header}</td></tr>
-                      <tr><td style="padding:28px;line-height:1.55;font-size:15px;">{content}</td></tr>
-                      <tr><td style="padding:18px 28px;background:#f8fafc;color:#64748b;font-size:12px;line-height:1.5;">{footer}</td></tr>
-                    </table>
-                  </td></tr>
-                </table>
-              </body>
-            </html>
-            """;
-    }
-
-    private static string ReferenceCard(string enquiryNumber) =>
-        $"<div style=\"margin:20px 0;padding:14px 16px;background:#ecfdf5;border-left:4px solid #0f766e;border-radius:6px;\"><span style=\"display:block;color:#475569;font-size:12px;text-transform:uppercase;letter-spacing:.08em;\">Enquiry reference</span><strong style=\"display:block;margin-top:4px;color:#0f172a;font-size:17px;\">{Html(enquiryNumber)}</strong></div>";
-
-    private static string BuildCustomerPlainText(Enquiry enquiry)
-    {
-        var product = string.IsNullOrWhiteSpace(enquiry.ProductRequirement)
-            ? "your requirement"
-            : enquiry.ProductRequirement;
-        return $"""
-            Hello {enquiry.ContactName},
-
-            Thank you for contacting Kanchi Wire Mesh. We have received your enquiry for {product}.
-
-            Reference: {enquiry.EnquiryNumber}
-
-            Our team will review the details and contact you using the information you provided.
-
-            Regards,
-            Kanchi Wire Mesh
-            """;
-    }
-
-    private static string BuildAdministratorPlainText(Enquiry enquiry) => $"""
-        New public enquiry received
-
-        Reference: {enquiry.EnquiryNumber}
-        Contact: {enquiry.ContactName}
-        Company: {enquiry.CompanyName ?? "-"}
-        Phone: {enquiry.Phone}
-        Email: {enquiry.Email ?? "-"}
-        Requirement: {enquiry.ProductRequirement ?? "-"}
-        Quantity: {enquiry.Quantity?.ToString("0.###") ?? "-"}
-        Unit: {enquiry.Unit ?? "-"}
-        Message: {enquiry.Message ?? "-"}
-        """;
 
     private static string Html(string? value) => HtmlEncoder.Default.Encode(value ?? string.Empty);
 

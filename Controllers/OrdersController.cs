@@ -94,7 +94,24 @@ public sealed class OrdersController(KanchimeshDbContext database) : ApiControll
             return ValidationError(relationError.Value.Field, relationError.Value.Message);
         }
 
-        var order = new SalesOrder { OrderNumber = DocumentNumbers.New("ORD") };
+        var lastOrderNumber = await database.SalesOrders
+            .Where(o => o.OrderNumber.StartsWith("ERH"))
+            .OrderByDescending(o => o.OrderNumber.Length)
+            .ThenByDescending(o => o.OrderNumber)
+            .Select(o => o.OrderNumber)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        int nextNumber = 1;
+        if (lastOrderNumber != null)
+        {
+            var numStr = lastOrderNumber.Substring(3);
+            if (int.TryParse(numStr, out int num))
+            {
+                nextNumber = num + 1;
+            }
+        }
+
+        var order = new SalesOrder { OrderNumber = $"ERH{nextNumber}" };
         ReplaceOrderValues(order, request, status);
         database.SalesOrders.Add(order);
         await database.SaveChangesAsync(cancellationToken);

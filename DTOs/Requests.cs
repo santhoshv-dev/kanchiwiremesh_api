@@ -162,3 +162,8 @@ public sealed class ChangePasswordRequest
     [Required, StringLength(128)] public string CurrentPassword { get; init; } = string.Empty;
     [Required, StringLength(128, MinimumLength = 8)] public string NewPassword { get; init; } = string.Empty;
 }
+
+public sealed class ForgotPasswordRequest
+{
+    [Required, EmailAddress, StringLength(254)] public string Email { get; init; } = string.Empty;
+}
