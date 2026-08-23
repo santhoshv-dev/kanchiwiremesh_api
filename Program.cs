@@ -165,7 +165,10 @@ builder.Services.AddCors(options => options.AddPolicy(flutterCorsPolicy, policy 
     }
     else
     {
-        throw new InvalidOperationException("Configure Cors:AllowedOrigins before running the API outside Development.");
+        // Keep the API available for same-origin and native clients when a browser
+        // origin has not been configured yet. Cross-origin browser requests are
+        // denied cleanly instead of turning every request into a server error.
+        policy.SetIsOriginAllowed(_ => false);
     }
 }));
 
