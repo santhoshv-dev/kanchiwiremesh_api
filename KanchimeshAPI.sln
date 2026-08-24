@@ -5,6 +5,8 @@ VisualStudioVersion = 18.4.11605.240 stable
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "KanchimeshAPI", "KanchimeshAPI.csproj", "{E8F58487-F4ED-657A-4760-5532109BB3C3}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "KanchimeshAPI.Tests", "tests\KanchimeshAPI.Tests\KanchimeshAPI.Tests.csproj", "{8CB20B1F-F3D8-4AF9-BE6A-70E468B1EE36}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -15,6 +17,10 @@ Global
 		{E8F58487-F4ED-657A-4760-5532109BB3C3}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{E8F58487-F4ED-657A-4760-5532109BB3C3}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{E8F58487-F4ED-657A-4760-5532109BB3C3}.Release|Any CPU.Build.0 = Release|Any CPU
+		{8CB20B1F-F3D8-4AF9-BE6A-70E468B1EE36}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{8CB20B1F-F3D8-4AF9-BE6A-70E468B1EE36}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{8CB20B1F-F3D8-4AF9-BE6A-70E468B1EE36}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{8CB20B1F-F3D8-4AF9-BE6A-70E468B1EE36}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

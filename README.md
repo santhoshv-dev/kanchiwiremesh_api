@@ -43,10 +43,51 @@ store, platform configuration, or environment variables instead.
 | `Email__Smtp__BrandLogoUrl` | Public HTTPS URL for the approved logo, such as `https://www.example.com/erp-logo-transparent.png` |
 | `Email__Smtp__AdminRecipients__0` (and following indexes) | Administrator inboxes that receive public-enquiry alerts |
 
-Production fails closed when a SQL Server connection, JWT signing key, or CORS
-origin configuration is missing. HTTPS redirection is enabled outside
-Development. Existing credentials removed from earlier configuration must be
-rotated in the external systems where they were issued.
+Production fails closed when a SQL Server connection or JWT signing key is
+missing. When no CORS origin is configured, same-origin and native clients can
+continue to use the API while cross-origin browser requests are denied cleanly.
+HTTPS redirection is enabled outside Development. Existing credentials removed
+from earlier configuration must be rotated in the external systems where they
+were issued.
+
+### Browser CORS deployment
+
+For a separately hosted public website or Flutter web build, add every browser
+origin to the API host's production environment settings. An origin is only the
+scheme, host, and optional port: do not include a path, trailing slash, API
+route, wildcard, or comma-separated list. Use sequential numbered settings for
+multiple web applications.
+
+```text
+ASPNETCORE_ENVIRONMENT=Production
+Cors__AllowedOrigins__0=https://www.example.com
+# Optional only when Flutter Web bypasses its development proxy and calls this
+# deployed API directly from a dynamic localhost port:
+# Cors__AllowLoopbackOrigins=true
+```
+
+Replace the example domains with the actual deployed frontend origins. Native
+Flutter applications do not send a browser `Origin` header and do not need a
+CORS entry. The tracked [production CORS template](appsettings.Production.template.json)
+is intentionally secret-free; configure its value in the deployment platform
+rather than committing an `appsettings.Production.json`. Restart the API after
+changing platform settings because configuration is read during startup.
+
+Verify a deployed public-enquiry form's preflight using its real API and web
+origins:
+
+```powershell
+curl.exe -i -X OPTIONS "https://api.example.com/api/public/enquiries" -H "Origin: https://www.example.com" -H "Access-Control-Request-Method: POST" -H "Access-Control-Request-Headers: content-type,idempotency-key"
+```
+
+The response must include `Access-Control-Allow-Origin` with exactly the
+configured web origin. Its absence means the API host did not receive the
+matching `Cors__AllowedOrigins__<index>` setting.
+
+`Cors__AllowLoopbackOrigins=true` is deliberately narrower than allowing all
+origins: it accepts only `localhost`, `127.0.0.1`, or another loopback address
+over HTTP(S), at any port. Enable it only when Flutter Web bypasses its
+same-origin development proxy and calls the deployed API directly.
 
 ## Google SMTP configuration
 
@@ -99,8 +140,9 @@ database that may already contain a legacy schema.
 
 ```powershell
 dotnet tool restore
-dotnet ef migrations list -- --environment Production
-dotnet ef database update -- --environment Production
+$env:ASPNETCORE_ENVIRONMENT = 'Production'
+dotnet ef migrations list
+dotnet ef database update
 ```
 
 Set the production connection string and, for an empty database, the bootstrap
@@ -115,25 +157,53 @@ on every application instance.
 The supplied design-time factory allows migration generation without committing
 a connection string. It does not connect to SQL Server while scaffolding.
 
+### Existing production database recovery
+
+The deployed database uses this additive migration history:
+
+```text
+20260813151835_InitialProductionSchema
+20260822121500_AddEnquiryEmailDeliveryJobsAndIdempotency
+20260822143000_DisableForcedPasswordChanges
+20260822150000_AddInventoryStockMonitoring
+```
+
+Keep that chain in the deployed API assembly. Do not replace it with a new
+single `Initial` migration after a database already exists: EF will treat that
+new migration as pending and attempt to create tables that already exist. If
+`/health` reports `Unhealthy` because of that mismatch, redeploy the API with
+the historical migration files restored; do not edit `__EFMigrationsHistory`
+manually. Check the pending state first, then apply only a genuinely new,
+reviewed additive migration.
+
 ## Authentication and authorization
 
 - `POST /api/auth/login` validates a database-backed, PBKDF2-hashed password
-  and returns a short-lived JWT.
+  and returns a 60-minute JWT. Each protected request also verifies that the
+  account is active and that its user version still matches the token, so
+  password, role, and account changes invalidate older tokens.
 - `GET /api/auth/me` returns the authenticated profile.
 - `POST /api/auth/change-password` remains available for voluntary password
   changes and returns a renewed JWT.
+- `POST /api/auth/forgot-password` is anonymous and IP-rate-limited. It keeps
+  the existing password unchanged whenever credential email delivery cannot be
+  completed, and always returns a generic response to avoid revealing whether
+  an account exists.
+- Login attempts are IP-rate-limited to ten requests per five minutes and return
+  generic credentials errors.
 - All administrator APIs use a fallback authorization policy requiring an
   authenticated `Administrator`.
-- `/health`, login, and `POST /api/public/enquiries` are the only intended
-  anonymous routes.
+- `/`, `/health`, login, and `POST /api/public/enquiries` are the intended
+  anonymous routes. The root endpoint returns a minimal running-status response
+  for a quick browser check; `/health` also verifies database readiness.
 
 ## Public enquiries, email, and notifications
 
 `POST /api/public/enquiries` validates and stores a public contact submission
 as a new enquiry. In the same database save it creates a linked unread admin
 notification and, when SMTP is ready, durable customer-confirmation and
-administrator-alert jobs. A bounded background worker sends branded HTML and
-plain-text email after the request completes, retries transient failures, and
+administrator-alert jobs. A bounded background worker sends branded HTML email
+after the request completes, retries transient failures, and
 records delivery state without exposing transport details to the customer.
 The endpoint is rate-limited to five submissions per client IP per ten minutes.
 Clients should provide a fresh `Idempotency-Key` header for each form submit
@@ -174,12 +244,13 @@ normal product update endpoint.
 
 ## Flutter and public web clients
 
-Flutter must be built with `--dart-define=API_BASE_URL=https://api.example`.
-The React public website is built with `VITE_API_BASE_URL=https://api.example`.
-Neither client contains a localhost or production fallback URL; each fails with
-a clear configuration message until a real base URL is supplied.
+Flutter requires an explicit `--dart-define=API_BASE_URL=https://api.example`
+for every build. The React public website must be built with
+`VITE_API_BASE_URL=https://api.example`.
 
 Set `Cors__AllowedOrigins__0` to the exact deployed public-web origin (and add
-the Flutter web origin at the next index if it differs). SMTP belongs to the
-API deployment only; the web site merely submits its public enquiry to the API
-and displays the returned queued/sent confirmation state.
+the Flutter web origin at the next index if it differs). Flutter Web calls the
+configured API directly, so its deployed origin also needs a CORS entry. Use
+`Cors__AllowLoopbackOrigins=true` only for intentional local Flutter Web
+debugging. SMTP belongs to the API deployment only; the web site merely submits
+its public enquiry to the API and displays the returned queued/sent state.

@@ -1,3 +1,4 @@
+using System.Data;
 using KanchimeshAPI.Data;
 using KanchimeshAPI.DTOs;
 using KanchimeshAPI.Models;
@@ -94,6 +95,9 @@ public sealed class OrdersController(KanchimeshDbContext database) : ApiControll
             return ValidationError(relationError.Value.Field, relationError.Value.Message);
         }
 
+        await using var numberAllocationTransaction = database.Database.IsRelational()
+            ? await database.Database.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken)
+            : null;
         var lastOrderNumber = await database.SalesOrders
             .Where(o => o.OrderNumber.StartsWith("ERH"))
             .OrderByDescending(o => o.OrderNumber.Length)
@@ -115,6 +119,11 @@ public sealed class OrdersController(KanchimeshDbContext database) : ApiControll
         ReplaceOrderValues(order, request, status);
         database.SalesOrders.Add(order);
         await database.SaveChangesAsync(cancellationToken);
+        if (numberAllocationTransaction is not null)
+        {
+            await numberAllocationTransaction.CommitAsync(cancellationToken);
+        }
+
         await database.Entry(order).Reference(item => item.Customer).LoadAsync(cancellationToken);
         return CreatedAtAction(nameof(GetOrder), new { order.Id }, ToDetailDto(order));
     }
@@ -155,9 +164,14 @@ public sealed class OrdersController(KanchimeshDbContext database) : ApiControll
             return ValidationError(nameof(request.CustomerId), "The customer cannot be changed after payments have been recorded for an order.");
         }
 
+        if (CannotCancel(status, order))
+        {
+            return PaidOrderCancellationConflict();
+        }
+
         ReplaceOrderValues(order, request, status);
         var appliedPaymentTotal = order.Payments.Where(payment => !payment.IsAdvance).Sum(payment => payment.Amount);
-        if (!string.Equals(status, "Cancelled", StringComparison.OrdinalIgnoreCase) && order.GrandTotal < appliedPaymentTotal)
+        if (order.GrandTotal < appliedPaymentTotal)
         {
             return ValidationError(nameof(request.Items), "The updated total cannot be less than payments already applied to this order.");
         }
@@ -186,14 +200,9 @@ public sealed class OrdersController(KanchimeshDbContext database) : ApiControll
             return NotFound();
         }
 
-        if (string.Equals(status, "Cancelled", StringComparison.OrdinalIgnoreCase) && order.Payments.Count > 0)
+        if (CannotCancel(status, order))
         {
-            return Conflict(new ProblemDetails
-            {
-                Status = StatusCodes.Status409Conflict,
-                Title = "This order has recorded payments.",
-                Detail = "Reverse or reassign the payments before cancelling the order."
-            });
+            return PaidOrderCancellationConflict();
         }
 
         order.Status = status;
@@ -367,6 +376,16 @@ public sealed class OrdersController(KanchimeshDbContext database) : ApiControll
 
         return await query.SingleOrDefaultAsync(order => order.Id == id, cancellationToken);
     }
+
+    private static bool CannotCancel(string status, SalesOrder order) =>
+        string.Equals(status, "Cancelled", StringComparison.OrdinalIgnoreCase) && order.Payments.Count > 0;
+
+    private ConflictObjectResult PaidOrderCancellationConflict() => Conflict(new ProblemDetails
+    {
+        Status = StatusCodes.Status409Conflict,
+        Title = "This order has recorded payments.",
+        Detail = "Reverse or reassign the payments before cancelling the order."
+    });
 
     private static OrderSummaryDto ToSummaryDto(SalesOrder order)
     {

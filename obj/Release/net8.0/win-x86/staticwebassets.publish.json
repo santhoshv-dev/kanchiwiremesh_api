@@ -1,0 +1,39 @@
+{
+  "Version": 1,
+  "Hash": "vHgpLstKxyZWZESrlsz3cNUSL3Rh2p78tUXbYZYqJKU=",
+  "Source": "KanchimeshAPI",
+  "BasePath": "_content/KanchimeshAPI",
+  "Mode": "Default",
+  "ManifestType": "Publish",
+  "ReferencedProjectsConfiguration": [],
+  "DiscoveryPatterns": [
+    {
+      "Name": "KanchimeshAPI\\wwwroot",
+      "Source": "KanchimeshAPI",
+      "ContentRoot": "E:\\ERH\\kanchimeshapi\\wwwroot\\",
+      "BasePath": "_content/KanchimeshAPI",
+      "Pattern": "**"
+    }
+  ],
+  "Assets": [
+    {
+      "Identity": "E:\\ERH\\kanchimeshapi\\wwwroot\\images\\erp_logo-transparent.png",
+      "SourceId": "KanchimeshAPI",
+      "SourceType": "Discovered",
+      "ContentRoot": "E:\\ERH\\kanchimeshapi\\wwwroot\\",
+      "BasePath": "_content/KanchimeshAPI",
+      "RelativePath": "images/erp_logo-transparent.png",
+      "AssetKind": "All",
+      "AssetMode": "All",
+      "AssetRole": "Primary",
+      "AssetMergeBehavior": "PreferTarget",
+      "AssetMergeSource": "",
+      "RelatedAsset": "",
+      "AssetTraitName": "",
+      "AssetTraitValue": "",
+      "CopyToOutputDirectory": "Never",
+      "CopyToPublishDirectory": "PreserveNewest",
+      "OriginalItemSpec": "wwwroot\\images\\erp_logo-transparent.png"
+    }
+  ]
+}

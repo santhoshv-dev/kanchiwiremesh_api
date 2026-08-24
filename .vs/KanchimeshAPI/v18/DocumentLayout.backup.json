@@ -3,8 +3,23 @@
   "WorkspaceRootPath": "E:\\ERH\\kanchimeshapi\\",
   "Documents": [
     {
-      "AbsoluteMoniker": "D:0:0:{E8F58487-F4ED-657A-4760-5532109BB3C3}|KanchimeshAPI.csproj|e:\\erh\\kanchimeshapi\\appsettings.json||{90A6B3A7-C1A3-4009-A288-E2FF89E96FA0}",
-      "RelativeMoniker": "D:0:0:{E8F58487-F4ED-657A-4760-5532109BB3C3}|KanchimeshAPI.csproj|solutionrelative:appsettings.json||{90A6B3A7-C1A3-4009-A288-E2FF89E96FA0}"
+      "AbsoluteMoniker": "D:0:0:{E8F58487-F4ED-657A-4760-5532109BB3C3}|KanchimeshAPI.csproj|e:\\erh\\kanchimeshapi\\controllers\\publicenquiriescontroller.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{E8F58487-F4ED-657A-4760-5532109BB3C3}|KanchimeshAPI.csproj|solutionrelative:controllers\\publicenquiriescontroller.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{E8F58487-F4ED-657A-4760-5532109BB3C3}|KanchimeshAPI.csproj|e:\\erh\\kanchimeshapi\\models\\emaildeliveryjobvalues.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{E8F58487-F4ED-657A-4760-5532109BB3C3}|KanchimeshAPI.csproj|solutionrelative:models\\emaildeliveryjobvalues.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{E8F58487-F4ED-657A-4760-5532109BB3C3}|KanchimeshAPI.csproj|e:\\erh\\kanchimeshapi\\program.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{E8F58487-F4ED-657A-4760-5532109BB3C3}|KanchimeshAPI.csproj|solutionrelative:program.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Program Files\\Microsoft Visual Studio\\18\\Community\\MSBuild\\Current\\Bin\\amd64\\Microsoft.Common.CurrentVersion.targets||{FA3CD31E-987B-443A-9B81-186104E8DAC1}|"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{E8F58487-F4ED-657A-4760-5532109BB3C3}|KanchimeshAPI.csproj|e:\\erh\\kanchimeshapi\\services\\jwttokenservice.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{E8F58487-F4ED-657A-4760-5532109BB3C3}|KanchimeshAPI.csproj|solutionrelative:services\\jwttokenservice.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
     },
     {
       "AbsoluteMoniker": "D:0:0:{E8F58487-F4ED-657A-4760-5532109BB3C3}|KanchimeshAPI.csproj|e:\\erh\\kanchimeshapi\\models\\entities.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
@@ -13,10 +28,6 @@
     {
       "AbsoluteMoniker": "D:0:0:{E8F58487-F4ED-657A-4760-5532109BB3C3}|KanchimeshAPI.csproj|e:\\erh\\kanchimeshapi\\models\\emaildeliverystatuses.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
       "RelativeMoniker": "D:0:0:{E8F58487-F4ED-657A-4760-5532109BB3C3}|KanchimeshAPI.csproj|solutionrelative:models\\emaildeliverystatuses.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
-    },
-    {
-      "AbsoluteMoniker": "D:0:0:{E8F58487-F4ED-657A-4760-5532109BB3C3}|KanchimeshAPI.csproj|e:\\erh\\kanchimeshapi\\models\\emaildeliveryjobvalues.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
-      "RelativeMoniker": "D:0:0:{E8F58487-F4ED-657A-4760-5532109BB3C3}|KanchimeshAPI.csproj|solutionrelative:models\\emaildeliveryjobvalues.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
     },
     {
       "AbsoluteMoniker": "D:0:0:{E8F58487-F4ED-657A-4760-5532109BB3C3}|KanchimeshAPI.csproj|e:\\erh\\kanchimeshapi\\data\\databaseseeder.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
@@ -29,14 +40,6 @@
     {
       "AbsoluteMoniker": "D:0:0:{E8F58487-F4ED-657A-4760-5532109BB3C3}|KanchimeshAPI.csproj|e:\\erh\\kanchimeshapi\\controllers\\apicontrollerbase.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
       "RelativeMoniker": "D:0:0:{E8F58487-F4ED-657A-4760-5532109BB3C3}|KanchimeshAPI.csproj|solutionrelative:controllers\\apicontrollerbase.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
-    },
-    {
-      "AbsoluteMoniker": "D:0:0:{E8F58487-F4ED-657A-4760-5532109BB3C3}|KanchimeshAPI.csproj|e:\\erh\\kanchimeshapi\\services\\jwttokenservice.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
-      "RelativeMoniker": "D:0:0:{E8F58487-F4ED-657A-4760-5532109BB3C3}|KanchimeshAPI.csproj|solutionrelative:services\\jwttokenservice.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
-    },
-    {
-      "AbsoluteMoniker": "D:0:0:{E8F58487-F4ED-657A-4760-5532109BB3C3}|KanchimeshAPI.csproj|e:\\erh\\kanchimeshapi\\program.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
-      "RelativeMoniker": "D:0:0:{E8F58487-F4ED-657A-4760-5532109BB3C3}|KanchimeshAPI.csproj|solutionrelative:program.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
     }
   ],
   "DocumentGroupContainers": [
@@ -46,35 +49,37 @@
       "DocumentGroups": [
         {
           "DockedWidth": 200,
-          "SelectedChildIndex": 5,
+          "SelectedChildIndex": 0,
           "Children": [
             {
               "$type": "Document",
-              "DocumentIndex": 3,
+              "DocumentIndex": 0,
+              "Title": "PublicEnquiriesController.cs",
+              "DocumentMoniker": "E:\\ERH\\kanchimeshapi\\Controllers\\PublicEnquiriesController.cs",
+              "RelativeDocumentMoniker": "Controllers\\PublicEnquiriesController.cs",
+              "ToolTip": "E:\\ERH\\kanchimeshapi\\Controllers\\PublicEnquiriesController.cs",
+              "RelativeToolTip": "Controllers\\PublicEnquiriesController.cs",
+              "ViewState": "AgIAAKgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-08-24T08:46:19.007Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 1,
               "Title": "EmailDeliveryJobValues.cs",
               "DocumentMoniker": "E:\\ERH\\kanchimeshapi\\Models\\EmailDeliveryJobValues.cs",
               "RelativeDocumentMoniker": "Models\\EmailDeliveryJobValues.cs",
               "ToolTip": "E:\\ERH\\kanchimeshapi\\Models\\EmailDeliveryJobValues.cs",
               "RelativeToolTip": "Models\\EmailDeliveryJobValues.cs",
-              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAA8AAAAAAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2026-08-22T11:05:25.22Z"
+              "WhenOpened": "2026-08-22T11:05:25.22Z",
+              "EditorCaption": ""
             },
             {
               "$type": "Document",
-              "DocumentIndex": 5,
-              "Title": "AuthController.cs",
-              "DocumentMoniker": "E:\\ERH\\kanchimeshapi\\Controllers\\AuthController.cs",
-              "RelativeDocumentMoniker": "Controllers\\AuthController.cs",
-              "ToolTip": "E:\\ERH\\kanchimeshapi\\Controllers\\AuthController.cs",
-              "RelativeToolTip": "Controllers\\AuthController.cs",
-              "ViewState": "AgIAAJIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
-              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2026-08-22T10:21:38.535Z"
-            },
-            {
-              "$type": "Document",
-              "DocumentIndex": 4,
+              "DocumentIndex": 7,
               "Title": "DatabaseSeeder.cs",
               "DocumentMoniker": "E:\\ERH\\kanchimeshapi\\Data\\DatabaseSeeder.cs",
               "RelativeDocumentMoniker": "Data\\DatabaseSeeder.cs",
@@ -86,44 +91,53 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 7,
+              "DocumentIndex": 4,
               "Title": "JwtTokenService.cs",
               "DocumentMoniker": "E:\\ERH\\kanchimeshapi\\Services\\JwtTokenService.cs",
               "RelativeDocumentMoniker": "Services\\JwtTokenService.cs",
               "ToolTip": "E:\\ERH\\kanchimeshapi\\Services\\JwtTokenService.cs",
               "RelativeToolTip": "Services\\JwtTokenService.cs",
-              "ViewState": "AgIAAB4AAAAAAAAAAAAowAAAAAAAAAAAAAAAAA==",
+              "ViewState": "AgIAACkAAAAAAAAAAAAAwDAAAAAAAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
               "WhenOpened": "2026-08-22T06:26:58.094Z"
             },
             {
               "$type": "Document",
+              "DocumentIndex": 3,
+              "Title": "Microsoft.Common.CurrentVersion.targets",
+              "DocumentMoniker": "C:\\Program Files\\Microsoft Visual Studio\\18\\Community\\MSBuild\\Current\\Bin\\amd64\\Microsoft.Common.CurrentVersion.targets",
+              "ToolTip": "C:\\Program Files\\Microsoft Visual Studio\\18\\Community\\MSBuild\\Current\\Bin\\amd64\\Microsoft.Common.CurrentVersion.targets",
+              "ViewState": "AgIAAAYVAAAAAAAAAAAvwBIVAAAEAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.003801|",
+              "WhenOpened": "2026-08-23T11:12:51.997Z"
+            },
+            {
+              "$type": "Document",
               "DocumentIndex": 8,
+              "Title": "AuthController.cs",
+              "DocumentMoniker": "E:\\ERH\\kanchimeshapi\\Controllers\\AuthController.cs",
+              "RelativeDocumentMoniker": "Controllers\\AuthController.cs",
+              "ToolTip": "E:\\ERH\\kanchimeshapi\\Controllers\\AuthController.cs",
+              "RelativeToolTip": "Controllers\\AuthController.cs",
+              "ViewState": "AgIAAJIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-08-22T10:21:38.535Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 2,
               "Title": "Program.cs",
               "DocumentMoniker": "E:\\ERH\\kanchimeshapi\\Program.cs",
               "RelativeDocumentMoniker": "Program.cs",
               "ToolTip": "E:\\ERH\\kanchimeshapi\\Program.cs",
               "RelativeToolTip": "Program.cs",
-              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+              "ViewState": "AgIAACgBAAAAAAAAAAAawDQBAAAAAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
               "WhenOpened": "2026-08-13T14:28:10.602Z"
             },
             {
               "$type": "Document",
-              "DocumentIndex": 0,
-              "Title": "appsettings.json",
-              "DocumentMoniker": "E:\\ERH\\kanchimeshapi\\appsettings.json",
-              "RelativeDocumentMoniker": "appsettings.json",
-              "ToolTip": "E:\\ERH\\kanchimeshapi\\appsettings.json",
-              "RelativeToolTip": "appsettings.json",
-              "ViewState": "AgIAAAAAAAAAAAAAAAAAAA0AAAANAAAAAAAAAA==",
-              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001642|",
-              "WhenOpened": "2026-08-11T15:29:12.088Z",
-              "EditorCaption": ""
-            },
-            {
-              "$type": "Document",
-              "DocumentIndex": 2,
+              "DocumentIndex": 6,
               "Title": "EmailDeliveryStatuses.cs",
               "DocumentMoniker": "E:\\ERH\\kanchimeshapi\\Models\\EmailDeliveryStatuses.cs",
               "RelativeDocumentMoniker": "Models\\EmailDeliveryStatuses.cs",
@@ -135,7 +149,7 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 1,
+              "DocumentIndex": 5,
               "Title": "Entities.cs",
               "DocumentMoniker": "E:\\ERH\\kanchimeshapi\\Models\\Entities.cs",
               "RelativeDocumentMoniker": "Models\\Entities.cs",
@@ -147,7 +161,7 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 6,
+              "DocumentIndex": 9,
               "Title": "ApiControllerBase.cs",
               "DocumentMoniker": "E:\\ERH\\kanchimeshapi\\Controllers\\ApiControllerBase.cs",
               "RelativeDocumentMoniker": "Controllers\\ApiControllerBase.cs",

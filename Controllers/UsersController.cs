@@ -51,6 +51,12 @@ public sealed class UsersController(
         };
         user.PasswordHash = passwordHasher.HashPassword(user, password);
 
+        database.ApplicationUsers.Add(user);
+        await database.SaveChangesAsync(cancellationToken);
+
+        // Persist the account before contacting SMTP so a successful email can
+        // never refer to an account that failed to commit. If delivery fails,
+        // remove the just-created account so the administrator can retry safely.
         var delivered = await accountEmailSender.SendAdministratorCredentialsAsync(
             user.Email,
             user.DisplayName,
@@ -58,8 +64,21 @@ public sealed class UsersController(
             cancellationToken);
         if (!delivered)
         {
+            try
+            {
+                database.ApplicationUsers.Remove(user);
+                await database.SaveChangesAsync(cancellationToken);
+            }
+            catch (Exception cleanupException)
+            {
+                SafeLog(() => logger.LogError(
+                    cleanupException,
+                    "Credential email failed and the temporary administrator account could not be removed for {Email}.",
+                    user.Email));
+            }
+
             SafeLog(() => logger.LogWarning(
-                "Administrator account creation was not persisted because the credential email failed for {Email}.",
+                "Administrator account creation was rolled back because the credential email failed for {Email}.",
                 user.Email));
             return Problem(
                 statusCode: StatusCodes.Status503ServiceUnavailable,
@@ -67,8 +86,6 @@ public sealed class UsersController(
                 detail: "Check the SMTP configuration and try again.");
         }
 
-        database.ApplicationUsers.Add(user);
-        await database.SaveChangesAsync(cancellationToken);
         return StatusCode(StatusCodes.Status201Created);
     }
 

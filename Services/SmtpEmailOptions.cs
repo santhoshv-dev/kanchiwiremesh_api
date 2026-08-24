@@ -24,8 +24,9 @@ public sealed class SmtpEmailOptions
     public IReadOnlyList<string> GetValidAdminRecipients()
     {
         return AdminRecipients
-            .Where(email => !string.IsNullOrWhiteSpace(email))
+            .Where(IsValidAddress)
             .Select(email => email.Trim())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
     }
 
@@ -43,14 +44,41 @@ public sealed class SmtpEmailOptions
             return false;
         }
 
-        if (string.IsNullOrWhiteSpace(FromAddress))
+        if (!IsValidAddress(FromAddress))
         {
-            configurationError = "A FromAddress is required to dispatch emails.";
+            configurationError = "A valid FromAddress is required to dispatch emails.";
+            return false;
+        }
+
+        var invalidRecipients = AdminRecipients
+            .Where(email => !string.IsNullOrWhiteSpace(email) && !IsValidAddress(email))
+            .ToList();
+        if (invalidRecipients.Count > 0)
+        {
+            configurationError = "Email:Smtp:AdminRecipients contains one or more invalid email addresses.";
             return false;
         }
 
         configurationError = null;
         return true;
+    }
+
+    private static bool IsValidAddress(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return false;
+        }
+
+        try
+        {
+            _ = new System.Net.Mail.MailAddress(value.Trim());
+            return true;
+        }
+        catch (FormatException)
+        {
+            return false;
+        }
     }
 
     public bool TryGetBrandLogoUrl([NotNullWhen(true)] out string? logoUrl)

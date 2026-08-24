@@ -1,4 +1,4 @@
-using System.Net;
+using System.Globalization;
 using System.Security.Claims;
 using System.Text;
 using System.Threading.RateLimiting;
@@ -40,10 +40,26 @@ builder.Services
     });
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
-builder.Services.AddHealthChecks();
+builder.Services
+    .AddHealthChecks()
+    .AddCheck<DatabaseReadinessHealthCheck>("database");
 builder.Services.AddRateLimiter(options =>
 {
     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    options.AddPolicy(RateLimitPolicies.Login, httpContext =>
+    {
+        var partitionKey = httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+        return RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey,
+            _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 10,
+                Window = TimeSpan.FromMinutes(5),
+                QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                QueueLimit = 0,
+                AutoReplenishment = true,
+            });
+    });
     options.AddPolicy(RateLimitPolicies.PublicEnquiries, httpContext =>
     {
         var partitionKey = httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
@@ -58,11 +74,26 @@ builder.Services.AddRateLimiter(options =>
                 AutoReplenishment = true,
             });
     });
+    options.AddPolicy(RateLimitPolicies.PasswordResets, httpContext =>
+    {
+        var partitionKey = httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+        return RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey,
+            _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 3,
+                Window = TimeSpan.FromMinutes(15),
+                QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                QueueLimit = 0,
+                AutoReplenishment = true,
+            });
+    });
 });
 builder.Services
     .AddOptions<SmtpEmailOptions>()
     .BindConfiguration(SmtpEmailOptions.SectionName);
 builder.Services.AddSingleton<IEnquiryEmailSender, SmtpEnquiryEmailSender>();
+builder.Services.AddSingleton<IAccountCredentialEmailSender, SmtpAccountCredentialEmailSender>();
 builder.Services.AddHostedService<EnquiryEmailDeliveryWorker>();
 
 var jwtOptions = JwtOptions.BindAndValidate(builder.Configuration, builder.Environment);
@@ -88,6 +119,35 @@ builder.Services
             NameClaimType = ClaimTypes.Name,
             RoleClaimType = ClaimTypes.Role,
         };
+        options.Events = new JwtBearerEvents
+        {
+            OnTokenValidated = async context =>
+            {
+                var userIdValue = context.Principal?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                var userVersion = context.Principal?.FindFirst(JwtClaimTypes.UserVersion)?.Value;
+                var role = context.Principal?.FindFirst(ClaimTypes.Role)?.Value;
+                if (!Guid.TryParse(userIdValue, out var userId) || string.IsNullOrWhiteSpace(userVersion))
+                {
+                    context.Fail("The access token is missing required user claims.");
+                    return;
+                }
+
+                var database = context.HttpContext.RequestServices.GetRequiredService<KanchimeshDbContext>();
+                var currentUser = await database.ApplicationUsers
+                    .AsNoTracking()
+                    .Where(user => user.Id == userId)
+                    .Select(user => new { user.IsActive, user.Role, user.UpdatedAtUtc })
+                    .SingleOrDefaultAsync(context.HttpContext.RequestAborted);
+                var currentVersion = currentUser?.UpdatedAtUtc.Ticks.ToString(CultureInfo.InvariantCulture);
+                if (currentUser is null ||
+                    !currentUser.IsActive ||
+                    !string.Equals(currentUser.Role, role, StringComparison.Ordinal) ||
+                    !string.Equals(currentVersion, userVersion, StringComparison.Ordinal))
+                {
+                    context.Fail("The access token is no longer valid.");
+                }
+            },
+        };
     });
 builder.Services.AddAuthorization(options =>
 {
@@ -108,8 +168,9 @@ var provider = builder.Configuration["Database:Provider"] ?? "SqlServer";
 var applyMigrationsOnStartup = builder.Configuration.GetValue<bool>("Database:ApplyMigrationsOnStartup");
 if (string.Equals(provider, "InMemory", StringComparison.OrdinalIgnoreCase))
 {
+    var inMemoryDatabaseName = builder.Configuration["Database:InMemoryName"] ?? "KanchimeshDevelopment";
     builder.Services.AddDbContext<KanchimeshDbContext>(options =>
-        options.UseInMemoryDatabase("KanchimeshDevelopment"));
+        options.UseInMemoryDatabase(inMemoryDatabaseName));
 }
 else
 {
@@ -126,53 +187,73 @@ else
 const string flutterCorsPolicy = "FlutterClients";
 var configuredOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? [];
 var configuredOriginSet = new HashSet<string>(configuredOrigins, StringComparer.OrdinalIgnoreCase);
+var allowLoopbackCorsOrigins = builder.Configuration.GetValue<bool>("Cors:AllowLoopbackOrigins");
 
-bool IsLoopbackDevelopmentOrigin(string origin)
+bool IsLoopbackCorsOrigin(string? origin)
 {
-    if (!Uri.TryCreate(origin, UriKind.Absolute, out var uri) ||
+    if (!IsExactCorsOrigin(origin) ||
+        !Uri.TryCreate(origin, UriKind.Absolute, out var uri))
+    {
+        return false;
+    }
+
+    return uri.IsLoopback;
+}
+
+bool IsExactCorsOrigin(string? origin)
+{
+    if (string.IsNullOrWhiteSpace(origin) ||
+        !string.Equals(origin, origin.Trim(), StringComparison.Ordinal) ||
+        origin.Contains('*') ||
+        origin.EndsWith("/", StringComparison.Ordinal) ||
+        !Uri.TryCreate(origin, UriKind.Absolute, out var uri) ||
         (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
     {
         return false;
     }
 
-    return string.Equals(uri.Host, "localhost", StringComparison.OrdinalIgnoreCase) ||
-        (IPAddress.TryParse(uri.Host, out var address) && IPAddress.IsLoopback(address));
+    return !string.IsNullOrEmpty(uri.Host) &&
+        string.IsNullOrEmpty(uri.UserInfo) &&
+        string.IsNullOrEmpty(uri.Query) &&
+        string.IsNullOrEmpty(uri.Fragment) &&
+        uri.AbsolutePath == "/";
+}
+
+if (configuredOrigins.Any(origin => !IsExactCorsOrigin(origin)))
+{
+    throw new InvalidOperationException(
+        "Cors:AllowedOrigins must contain exact HTTP(S) origins without whitespace, paths, trailing slashes, query strings, fragments, credentials, or wildcards. Configure Cors__AllowedOrigins__0 (and following indexes) on the API host.");
 }
 
 builder.Services.AddCors(options => options.AddPolicy(flutterCorsPolicy, policy =>
 {
     policy.AllowAnyHeader().AllowAnyMethod();
-    if (builder.Environment.IsDevelopment())
+    if (configuredOrigins.Length > 0 || allowLoopbackCorsOrigins)
     {
-        if (configuredOrigins.Length > 0)
-        {
-            // Flutter web selects an ephemeral local port. Preserve explicitly
-            // configured origins while allowing only loopback browser origins in
-            // Development; production remains restricted to configured origins.
-            policy.SetIsOriginAllowed(origin =>
-                configuredOriginSet.Contains(origin) || IsLoopbackDevelopmentOrigin(origin));
-        }
-        else
-        {
-            // Mobile applications have no browser origin. Allow local browser clients during
-            // development as well; production remains limited to configured origins.
-            policy.AllowAnyOrigin();
-        }
-    }
-    else if (configuredOrigins.Length > 0)
-    {
-        policy.WithOrigins(configuredOrigins);
+        policy.SetIsOriginAllowed(origin =>
+            configuredOriginSet.Contains(origin) ||
+            (allowLoopbackCorsOrigins && IsLoopbackCorsOrigin(origin)));
     }
     else
     {
-        // Keep the API available for same-origin and native clients when a browser
-        // origin has not been configured yet. Cross-origin browser requests are
-        // denied cleanly instead of turning every request into a server error.
         policy.SetIsOriginAllowed(_ => false);
     }
 }));
 
 var app = builder.Build();
+
+if (!app.Environment.IsDevelopment() &&
+    configuredOrigins.Length == 0 &&
+    !allowLoopbackCorsOrigins)
+{
+    SafeLog(() => app.Logger.LogWarning(
+        "No production CORS origins are configured. Cross-origin browser requests will be denied. Set Cors__AllowedOrigins__0 (and following indexes) on the API host, then restart the application."));
+}
+else if (!app.Environment.IsDevelopment() && allowLoopbackCorsOrigins)
+{
+    SafeLog(() => app.Logger.LogInformation(
+        "CORS accepts loopback browser origins for Flutter Web development."));
+}
 
 app.UseExceptionHandler();
 app.UseStatusCodePages();
@@ -194,6 +275,7 @@ app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
 
+app.MapGet("/", () => Results.Ok(new { status = "running", health = "/health" })).AllowAnonymous();
 app.MapHealthChecks("/health").AllowAnonymous();
 app.MapControllers();
 
@@ -216,7 +298,12 @@ await using (var scope = app.Services.CreateAsyncScope())
     {
         try
         {
-            databaseIsReady = (await database.Database.GetAppliedMigrationsAsync()).Any();
+            databaseIsReady = !(await database.Database.GetPendingMigrationsAsync()).Any();
+            if (!databaseIsReady)
+            {
+                SafeLog(() => app.Logger.LogWarning(
+                    "Database migrations are pending. Database seeding is deferred."));
+            }
         }
         catch (Exception exception)
         {
@@ -248,7 +335,7 @@ await using (var scope = app.Services.CreateAsyncScope())
     else
     {
         SafeLog(() => app.Logger.LogInformation(
-            "Database migrations were not applied at startup. The bootstrap administrator will be seeded after the reviewed migrations are applied."));
+            "The database is not ready. The bootstrap administrator will be seeded after the reviewed migrations are applied."));
     }
 }
 

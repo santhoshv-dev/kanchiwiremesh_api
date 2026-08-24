@@ -74,7 +74,10 @@ public sealed class EnquiriesController(KanchimeshDbContext database) : ApiContr
             return ValidationError(nameof(request.CustomerId), "The selected customer does not exist.");
         }
 
-        var enquiry = new Enquiry { EnquiryNumber = DocumentNumbers.New("ENQ") };
+        var enquiry = new Enquiry
+        {
+            EnquiryNumber = DocumentNumbers.New(DocumentNumbers.EnquiryPrefix),
+        };
         Apply(enquiry, request, status);
         database.Enquiries.Add(enquiry);
         await database.SaveChangesAsync(cancellationToken);

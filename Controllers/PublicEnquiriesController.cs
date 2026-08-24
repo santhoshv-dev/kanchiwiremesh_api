@@ -55,7 +55,7 @@ public sealed class PublicEnquiriesController(
 
         var enquiry = new Enquiry
         {
-            EnquiryNumber = DocumentNumbers.New("ENQ"),
+            EnquiryNumber = DocumentNumbers.New(DocumentNumbers.EnquiryPrefix),
             PublicSubmissionKey = submissionKey,
             ContactName = request.ContactName.Trim(),
             CompanyName = NullIfWhiteSpace(request.CompanyName),

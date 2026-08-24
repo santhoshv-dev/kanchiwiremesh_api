@@ -9,4 +9,5 @@ public static class AuthorizationPolicies
 public static class JwtClaimTypes
 {
     public const string MustChangePassword = "must_change_password";
+    public const string UserVersion = "user_version";
 }

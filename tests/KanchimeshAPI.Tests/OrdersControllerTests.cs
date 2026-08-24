@@ -1,0 +1,118 @@
+using KanchimeshAPI.Controllers;
+using KanchimeshAPI.Data;
+using KanchimeshAPI.DTOs;
+using KanchimeshAPI.Models;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+
+namespace KanchimeshAPI.Tests;
+
+public sealed class OrdersControllerTests
+{
+    [Fact]
+    public async Task FullUpdate_CannotCancelAnOrderWithRecordedPayments()
+    {
+        await using var database = CreateDatabase();
+        var order = await SeedPaidOrder(database);
+        var controller = new OrdersController(database);
+        var request = CreateCancellationRequest(order);
+
+        var response = await controller.UpdateOrder(order.Id, request, CancellationToken.None);
+
+        var conflict = Assert.IsType<ConflictObjectResult>(response.Result);
+        var problem = Assert.IsType<ProblemDetails>(conflict.Value);
+        Assert.Equal(409, problem.Status);
+        var persisted = await database.SalesOrders.AsNoTracking().SingleAsync(item => item.Id == order.Id);
+        Assert.Equal("Confirmed", persisted.Status);
+    }
+
+    [Fact]
+    public async Task StatusUpdate_CannotCancelAnOrderWithRecordedPayments()
+    {
+        await using var database = CreateDatabase();
+        var order = await SeedPaidOrder(database);
+        var controller = new OrdersController(database);
+
+        var response = await controller.UpdateStatus(
+            order.Id,
+            new OrderStatusRequest { Status = "Cancelled" },
+            CancellationToken.None);
+
+        var conflict = Assert.IsType<ConflictObjectResult>(response.Result);
+        var problem = Assert.IsType<ProblemDetails>(conflict.Value);
+        Assert.Equal(409, problem.Status);
+        var persisted = await database.SalesOrders.AsNoTracking().SingleAsync(item => item.Id == order.Id);
+        Assert.Equal("Confirmed", persisted.Status);
+    }
+
+    private static KanchimeshDbContext CreateDatabase()
+    {
+        var options = new DbContextOptionsBuilder<KanchimeshDbContext>()
+            .UseInMemoryDatabase(Guid.NewGuid().ToString())
+            .Options;
+        return new KanchimeshDbContext(options);
+    }
+
+    private static async Task<SalesOrder> SeedPaidOrder(KanchimeshDbContext database)
+    {
+        var customer = new Customer
+        {
+            CustomerCode = "CUS-TEST",
+            ContactName = "Test Customer",
+            Phone = "9876543210",
+        };
+        var order = new SalesOrder
+        {
+            OrderNumber = "ERH1",
+            Customer = customer,
+            Status = "Confirmed",
+            OrderDate = new DateOnly(2026, 8, 24),
+            Subtotal = 1000m,
+            TaxAmount = 180m,
+            GrandTotal = 1180m,
+            Items =
+            [
+                new SalesOrderItem
+                {
+                    Description = "Wire mesh",
+                    Quantity = 1m,
+                    Unit = "pcs",
+                    Rate = 1000m,
+                    GstRate = 18m,
+                    LineSubtotal = 1000m,
+                    TaxAmount = 180m,
+                    LineTotal = 1180m,
+                },
+            ],
+        };
+        order.Payments.Add(new Payment
+        {
+            PaymentNumber = "PAY-TEST",
+            Customer = customer,
+            SalesOrder = order,
+            Amount = 500m,
+            Method = "UPI",
+        });
+        database.SalesOrders.Add(order);
+        await database.SaveChangesAsync();
+        return order;
+    }
+
+    private static OrderRequest CreateCancellationRequest(SalesOrder order) => new()
+    {
+        CustomerId = order.CustomerId,
+        OrderDate = order.OrderDate,
+        Status = "Cancelled",
+        Items =
+        [
+            new OrderItemRequest
+            {
+                Description = "Wire mesh",
+                Quantity = 1m,
+                Unit = "pcs",
+                Rate = 1000m,
+                GstRate = 18m,
+            },
+        ],
+    };
+}

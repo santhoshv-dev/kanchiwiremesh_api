@@ -51,7 +51,9 @@ public static class DatabaseSeeder
         BootstrapAdministratorOptions bootstrapAdministrator,
         CancellationToken cancellationToken = default)
     {
-        var exists = await context.ApplicationUsers.AsNoTracking().AnyAsync(cancellationToken);
+        var exists = await context.ApplicationUsers.AsNoTracking().AnyAsync(
+            user => user.IsActive && user.Role == ApplicationRoles.Administrator,
+            cancellationToken);
         if (exists)
         {
             return true;

@@ -42,7 +42,7 @@ public sealed class DashboardController(KanchimeshDbContext database) : ApiContr
             .Select(offset => monthlySalesByMonth.GetValueOrDefault(firstSalesMonth.AddMonths(offset), 0m))
             .ToList();
 
-        var orders = await database.SalesOrders.AsNoTracking()
+        var recentOrders = await database.SalesOrders.AsNoTracking()
             .Where(order => order.Status != "Cancelled")
             .Include(order => order.Customer)
             .Include(order => order.Payments)
@@ -50,19 +50,23 @@ public sealed class DashboardController(KanchimeshDbContext database) : ApiContr
             .AsSplitQuery()
             .OrderByDescending(order => order.OrderDate)
             .ThenByDescending(order => order.CreatedAtUtc)
+            .Take(5)
             .ToListAsync(cancellationToken);
-        var payments = await database.Payments.AsNoTracking()
-            .Include(payment => payment.SalesOrder)
-            .ToListAsync(cancellationToken);
-
-        var totalSales = orders.Sum(order => order.GrandTotal);
-        var appliedToOrders = orders.Sum(order => order.Payments
-            .Where(payment => !payment.IsAdvance)
-            .Sum(payment => payment.Amount));
-        var validPayments = payments.Where(payment => payment.SalesOrder is null || payment.SalesOrder.Status != "Cancelled").ToList();
-        var totalReceived = validPayments.Sum(payment => payment.Amount);
-        var advanceBalance = validPayments.Where(payment => payment.IsAdvance).Sum(payment => payment.Amount);
-        var recentOrders = orders.Take(5).Select(ToSummaryDto).ToList();
+        var totalSales = await database.SalesOrders
+            .Where(order => order.Status != "Cancelled")
+            .SumAsync(order => (decimal?)order.GrandTotal, cancellationToken) ?? 0m;
+        var totalReceived = await database.Payments
+            .Where(payment => payment.SalesOrderId == null || payment.SalesOrder!.Status != "Cancelled")
+            .SumAsync(payment => (decimal?)payment.Amount, cancellationToken) ?? 0m;
+        var appliedToOrders = await database.Payments
+            .Where(payment => !payment.IsAdvance &&
+                payment.SalesOrderId != null &&
+                payment.SalesOrder!.Status != "Cancelled")
+            .SumAsync(payment => (decimal?)payment.Amount, cancellationToken) ?? 0m;
+        var advanceBalance = await database.Payments
+            .Where(payment => payment.IsAdvance &&
+                (payment.SalesOrderId == null || payment.SalesOrder!.Status != "Cancelled"))
+            .SumAsync(payment => (decimal?)payment.Amount, cancellationToken) ?? 0m;
 
         return Ok(new DashboardSummaryDto(
             customerCount,
@@ -75,7 +79,7 @@ public sealed class DashboardController(KanchimeshDbContext database) : ApiContr
             totalReceived,
             Math.Max(totalSales - appliedToOrders, 0m),
             advanceBalance,
-            recentOrders,
+            recentOrders.Select(ToSummaryDto).ToList(),
             salesBars));
     }
 

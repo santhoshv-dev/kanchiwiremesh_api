@@ -1,0 +1,25 @@
+{
+  "Files": [
+    {
+      "Id": "E:\\ERH\\kanchimeshapi\\wwwroot\\images\\erp_logo-transparent.png",
+      "PackagePath": "staticwebassets\\images\\erp_logo-transparent.png"
+    },
+    {
+      "Id": "obj\\Release\\net8.0\\win-x86\\staticwebassets\\msbuild.KanchimeshAPI.Microsoft.AspNetCore.StaticWebAssets.props",
+      "PackagePath": "build\\Microsoft.AspNetCore.StaticWebAssets.props"
+    },
+    {
+      "Id": "obj\\Release\\net8.0\\win-x86\\staticwebassets\\msbuild.build.KanchimeshAPI.props",
+      "PackagePath": "build\\KanchimeshAPI.props"
+    },
+    {
+      "Id": "obj\\Release\\net8.0\\win-x86\\staticwebassets\\msbuild.buildMultiTargeting.KanchimeshAPI.props",
+      "PackagePath": "buildMultiTargeting\\KanchimeshAPI.props"
+    },
+    {
+      "Id": "obj\\Release\\net8.0\\win-x86\\staticwebassets\\msbuild.buildTransitive.KanchimeshAPI.props",
+      "PackagePath": "buildTransitive\\KanchimeshAPI.props"
+    }
+  ],
+  "ElementsToRemove": []
+}

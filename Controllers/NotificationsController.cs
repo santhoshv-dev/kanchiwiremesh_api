@@ -80,23 +80,13 @@ public sealed class NotificationsController(KanchimeshDbContext database) : ApiC
     [ProducesResponseType(typeof(MarkNotificationsReadResultDto), StatusCodes.Status200OK)]
     public async Task<ActionResult<MarkNotificationsReadResultDto>> MarkAllAsRead(CancellationToken cancellationToken)
     {
-        var unreadNotifications = await database.Notifications
-            .Where(notification => !notification.IsRead)
-            .ToListAsync(cancellationToken);
-        if (unreadNotifications.Count == 0)
-        {
-            return Ok(new MarkNotificationsReadResultDto(0));
-        }
-
         var readAtUtc = DateTime.UtcNow;
-        foreach (var notification in unreadNotifications)
-        {
-            notification.IsRead = true;
-            notification.ReadAtUtc = readAtUtc;
-        }
-
-        await database.SaveChangesAsync(cancellationToken);
-        return Ok(new MarkNotificationsReadResultDto(unreadNotifications.Count));
+        var updatedCount = await database.Notifications
+            .Where(notification => !notification.IsRead)
+            .ExecuteUpdateAsync(updates => updates
+                .SetProperty(notification => notification.IsRead, true)
+                .SetProperty(notification => notification.ReadAtUtc, readAtUtc), cancellationToken);
+        return Ok(new MarkNotificationsReadResultDto(updatedCount));
     }
 
     private static NotificationDto ToDto(ApplicationNotification notification) => new(

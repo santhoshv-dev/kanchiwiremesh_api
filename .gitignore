@@ -1,4 +1,7 @@
 # Runtime-only configuration and local developer secrets
+.env
+.env.*
+!.env.example
 appsettings.Local.json
 appsettings.*.Local.json
 appsettings.Production.json
@@ -6,8 +9,13 @@ key.properties
 
 # Local IIS/Web Deploy credentials and transforms
 /Properties/PublishProfiles/
+*.csproj.user
+.vs/
 
 # Local EF Core tool cache and build output
 .tool-data/
 bin/
 obj/
+artifacts/
+TestResults/
+*.log

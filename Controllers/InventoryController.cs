@@ -159,6 +159,17 @@ public sealed class InventoryController(KanchimeshDbContext database) : ApiContr
             });
         }
 
+        var latestMovementAtUtc = await database.StockMovements
+            .Where(movement => movement.ProductId == productId)
+            .Select(movement => (DateTime?)movement.OccurredAtUtc)
+            .MaxAsync(cancellationToken);
+        if (latestMovementAtUtc.HasValue && occurredAtUtc < latestMovementAtUtc.Value)
+        {
+            return ValidationError(
+                nameof(request.OccurredAtUtc),
+                "Stock movements must not be backdated before the latest recorded movement.");
+        }
+
         var balanceAfter = product.QuantityOnHand + request.QuantityChange;
         if (balanceAfter < 0m)
         {

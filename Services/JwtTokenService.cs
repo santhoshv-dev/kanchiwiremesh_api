@@ -1,4 +1,5 @@
 using System.IdentityModel.Tokens.Jwt;
+using System.Globalization;
 using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
@@ -43,9 +44,9 @@ public sealed class JwtOptions
                 "Authentication:Jwt:SigningKey must be configured from a secret store and contain at least 32 bytes.");
         }
 
-        if (options.AccessTokenLifetimeMinutes is < 5 or > 525600)
+        if (options.AccessTokenLifetimeMinutes is < 5 or > 1440)
         {
-            throw new InvalidOperationException("Authentication:Jwt:AccessTokenLifetimeMinutes must be between 5 and 525600.");
+            throw new InvalidOperationException("Authentication:Jwt:AccessTokenLifetimeMinutes must be between 5 and 1440.");
         }
 
         return options;
@@ -74,6 +75,7 @@ public sealed class JwtTokenService(JwtOptions options) : IJwtTokenService
             new Claim(ClaimTypes.Name, user.DisplayName),
             new Claim(ClaimTypes.Role, user.Role),
             new Claim(JwtClaimTypes.MustChangePassword, user.MustChangePassword ? "true" : "false"),
+            new Claim(JwtClaimTypes.UserVersion, user.UpdatedAtUtc.Ticks.ToString(CultureInfo.InvariantCulture)),
         };
 
         var signingKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(options.SigningKey));

@@ -23,7 +23,28 @@
   <ItemGroup>
     <Content Include="EmailTemplates\**">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </Content>
+    <Content Update="appsettings.Production.json;appsettings.Local.json;appsettings.*.Local.json;appsettings.*.template.json">
+      <CopyToOutputDirectory>Never</CopyToOutputDirectory>
+      <CopyToPublishDirectory>Never</CopyToPublishDirectory>
     </Content>
   </ItemGroup>
+
+  <ItemGroup>
+    <Compile Remove="tests\**\*.cs" />
+    <Content Remove="tests\**" />
+    <None Remove="tests\**" />
+  </ItemGroup>
+
+  <Target Name="RejectForbiddenPublishedConfiguration" AfterTargets="Publish">
+    <ItemGroup>
+      <_ForbiddenPublishedConfiguration Include="$(PublishDir)appsettings.Production.json" Condition="Exists('$(PublishDir)appsettings.Production.json')" />
+      <_ForbiddenPublishedConfiguration Include="$(PublishDir)appsettings.Local.json" Condition="Exists('$(PublishDir)appsettings.Local.json')" />
+      <_ForbiddenPublishedConfiguration Include="$(PublishDir)appsettings.*.Local.json" />
+    </ItemGroup>
+    <Error Condition="'@(_ForbiddenPublishedConfiguration)' != ''"
+           Text="Publish output contains a local secret-bearing appsettings file: @(_ForbiddenPublishedConfiguration). Publish from a clean checkout and provide production secrets through the host environment." />
+  </Target>
 
 </Project>
