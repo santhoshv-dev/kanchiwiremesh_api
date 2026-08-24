@@ -185,6 +185,7 @@ else
 }
 
 const string flutterCorsPolicy = "FlutterClients";
+var allowAllCorsOrigins = builder.Configuration.GetValue<bool>("Cors:AllowAllOrigins");
 var configuredOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? [];
 var configuredOriginSet = new HashSet<string>(configuredOrigins, StringComparer.OrdinalIgnoreCase);
 var allowLoopbackCorsOrigins = builder.Configuration.GetValue<bool>("Cors:AllowLoopbackOrigins");
@@ -219,7 +220,7 @@ bool IsExactCorsOrigin(string? origin)
         uri.AbsolutePath == "/";
 }
 
-if (configuredOrigins.Any(origin => !IsExactCorsOrigin(origin)))
+if (!allowAllCorsOrigins && configuredOrigins.Any(origin => !IsExactCorsOrigin(origin)))
 {
     throw new InvalidOperationException(
         "Cors:AllowedOrigins must contain exact HTTP(S) origins without whitespace, paths, trailing slashes, query strings, fragments, credentials, or wildcards. Configure Cors__AllowedOrigins__0 (and following indexes) on the API host.");
@@ -228,7 +229,12 @@ if (configuredOrigins.Any(origin => !IsExactCorsOrigin(origin)))
 builder.Services.AddCors(options => options.AddPolicy(flutterCorsPolicy, policy =>
 {
     policy.AllowAnyHeader().AllowAnyMethod();
-    if (configuredOrigins.Length > 0 || allowLoopbackCorsOrigins)
+    if (allowAllCorsOrigins)
+    {
+        // Allow any origin — suitable when the app is live and served over HTTPS.
+        policy.AllowAnyOrigin();
+    }
+    else if (configuredOrigins.Length > 0 || allowLoopbackCorsOrigins)
     {
         policy.SetIsOriginAllowed(origin =>
             configuredOriginSet.Contains(origin) ||
@@ -242,7 +248,12 @@ builder.Services.AddCors(options => options.AddPolicy(flutterCorsPolicy, policy 
 
 var app = builder.Build();
 
-if (!app.Environment.IsDevelopment() &&
+if (allowAllCorsOrigins)
+{
+    SafeLog(() => app.Logger.LogWarning(
+        "CORS is configured to allow ALL origins (Cors:AllowAllOrigins = true). Ensure this is intentional for your deployment."));
+}
+else if (!app.Environment.IsDevelopment() &&
     configuredOrigins.Length == 0 &&
     !allowLoopbackCorsOrigins)
 {
