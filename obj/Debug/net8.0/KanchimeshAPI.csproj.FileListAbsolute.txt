@@ -491,3 +491,4 @@ E:\ERH\kanchimeshapi\obj\Debug\net8.0\refint\KanchimeshAPI.dll
 E:\ERH\kanchimeshapi\obj\Debug\net8.0\KanchimeshAPI.pdb
 E:\ERH\kanchimeshapi\obj\Debug\net8.0\KanchimeshAPI.genruntimeconfig.cache
 E:\ERH\kanchimeshapi\obj\Debug\net8.0\ref\KanchimeshAPI.dll
+e:\ERH\kanchimeshapi\bin\Debug\net8.0\appsettings.Production.json

@@ -98,21 +98,20 @@ public sealed class OrdersController(KanchimeshDbContext database) : ApiControll
         await using var numberAllocationTransaction = database.Database.IsRelational()
             ? await database.Database.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken)
             : null;
-        var lastOrderNumber = await database.SalesOrders
+        var existingOrderNumbers = await database.SalesOrders
             .Where(o => o.OrderNumber.StartsWith("ERH"))
-            .OrderByDescending(o => o.OrderNumber.Length)
-            .ThenByDescending(o => o.OrderNumber)
             .Select(o => o.OrderNumber)
-            .FirstOrDefaultAsync(cancellationToken);
+            .ToListAsync(cancellationToken);
 
         int nextNumber = 1;
-        if (lastOrderNumber != null)
+        if (existingOrderNumbers.Count > 0)
         {
-            var numStr = lastOrderNumber.Substring(3);
-            if (int.TryParse(numStr, out int num))
-            {
-                nextNumber = num + 1;
-            }
+            var maxNum = existingOrderNumbers
+                .Select(n => n.Substring(3))
+                .Select(n => int.TryParse(n, out var num) ? num : 0)
+                .DefaultIfEmpty(0)
+                .Max();
+            nextNumber = maxNum + 1;
         }
 
         var order = new SalesOrder { OrderNumber = $"ERH{nextNumber}" };

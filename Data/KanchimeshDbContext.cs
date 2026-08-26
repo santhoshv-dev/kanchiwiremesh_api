@@ -79,6 +79,8 @@ public sealed class KanchimeshDbContext(DbContextOptions<KanchimeshDbContext> op
             entity.Property(x => x.Width).HasPrecision(18, 3);
             entity.Property(x => x.Length).HasPrecision(18, 3);
             entity.Property(x => x.QuantityOnHand).HasPrecision(18, 3).HasDefaultValue(0m);
+            entity.Property(x => x.TotalStockAdded).HasPrecision(18, 3).HasDefaultValue(0m);
+            entity.Property(x => x.TotalSold).HasPrecision(18, 3).HasDefaultValue(0m);
             entity.Property(x => x.ReorderLevel).HasPrecision(18, 3).HasDefaultValue(0m);
         });
 

@@ -140,3 +140,4 @@ E:\ERH\kanchimeshapi\obj\Release\net8.0\win-x86\refint\KanchimeshAPI.dll
 E:\ERH\kanchimeshapi\obj\Release\net8.0\win-x86\KanchimeshAPI.pdb
 E:\ERH\kanchimeshapi\obj\Release\net8.0\win-x86\KanchimeshAPI.genruntimeconfig.cache
 E:\ERH\kanchimeshapi\obj\Release\net8.0\win-x86\ref\KanchimeshAPI.dll
+E:\ERH\kanchimeshapi\bin\Release\net8.0\win-x86\appsettings.Production.json

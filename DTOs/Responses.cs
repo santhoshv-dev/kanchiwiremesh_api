@@ -57,6 +57,8 @@ public sealed record ProductDto(
     decimal Rate,
     decimal GstRate,
     decimal QuantityOnHand,
+    decimal TotalStockAdded,
+    decimal TotalSold,
     decimal ReorderLevel,
     bool IsLowStock,
     bool IsOutOfStock,

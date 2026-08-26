@@ -1,6 +1,7 @@
 E:\ERH\kanchimeshapi\obj\Release\net8.0\win-x86\PubTmp\Out\KanchimeshAPI.exe
 E:\ERH\kanchimeshapi\obj\Release\net8.0\win-x86\PubTmp\Out\appsettings.Development.json
 E:\ERH\kanchimeshapi\obj\Release\net8.0\win-x86\PubTmp\Out\appsettings.json
+E:\ERH\kanchimeshapi\obj\Release\net8.0\win-x86\PubTmp\Out\appsettings.Production.json
 E:\ERH\kanchimeshapi\obj\Release\net8.0\win-x86\PubTmp\Out\global.json
 E:\ERH\kanchimeshapi\obj\Release\net8.0\win-x86\PubTmp\Out\EmailTemplates\AdminNotification.html
 E:\ERH\kanchimeshapi\obj\Release\net8.0\win-x86\PubTmp\Out\EmailTemplates\CustomerConfirmation.html

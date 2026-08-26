@@ -70,6 +70,7 @@ public sealed class ProductsController(KanchimeshDbContext database) : ApiContro
         {
             ProductCode = DocumentNumbers.New("PRD"),
             QuantityOnHand = initialStock,
+            TotalStockAdded = initialStock,
         };
         Apply(product, request);
         database.Products.Add(product);

@@ -7,7 +7,7 @@ public static class DtoMappings
     public static ProductDto ToDto(this Product product) => new(
         product.Id, product.ProductCode, product.Name, product.Category, product.MeshType,
         product.MeshOpening, product.WireDiameter, product.Width, product.Length, product.Unit,
-        product.Rate, product.GstRate, product.QuantityOnHand, product.ReorderLevel,
+        product.Rate, product.GstRate, product.QuantityOnHand, product.TotalStockAdded, product.TotalSold, product.ReorderLevel,
         product.QuantityOnHand <= product.ReorderLevel,
         product.QuantityOnHand <= 0m,
         product.Description, product.IsActive, product.UpdatedAtUtc);

@@ -186,6 +186,15 @@ public sealed class InventoryController(KanchimeshDbContext database) : ApiContr
             Reference = Null(request.Reference),
             OccurredAtUtc = occurredAtUtc,
         };
+        if (movementType == StockMovementTypes.StockIn || (movementType == StockMovementTypes.Adjustment && request.QuantityChange > 0))
+        {
+            product.TotalStockAdded += request.QuantityChange;
+        }
+        else if (movementType == StockMovementTypes.StockOut || (movementType == StockMovementTypes.Adjustment && request.QuantityChange < 0))
+        {
+            product.TotalSold -= request.QuantityChange; // Minus a negative is adding to TotalSold
+        }
+
         product.QuantityOnHand = balanceAfter;
         database.StockMovements.Add(movement);
 

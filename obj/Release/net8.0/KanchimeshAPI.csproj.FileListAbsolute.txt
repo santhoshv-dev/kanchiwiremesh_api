@@ -151,3 +151,4 @@ E:\ERH\kanchimeshapi\obj\Release\net8.0\KanchimeshAPI.pdb
 E:\ERH\kanchimeshapi\obj\Release\net8.0\KanchimeshAPI.genruntimeconfig.cache
 E:\ERH\kanchimeshapi\obj\Release\net8.0\ref\KanchimeshAPI.dll
 E:\ERH\kanchimeshapi\bin\Release\net8.0\KanchimeshAPI.exe
+E:\ERH\kanchimeshapi\bin\Release\net8.0\appsettings.Production.json

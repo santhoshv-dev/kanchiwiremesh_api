@@ -74,6 +74,8 @@ public sealed class Product : AuditableEntity
     /// </summary>
     public decimal ReorderLevel { get; set; }
     public string? Description { get; set; }
+    public decimal TotalStockAdded { get; set; }
+    public decimal TotalSold { get; set; }
     public bool IsActive { get; set; } = true;
 
     public ICollection<SalesOrderItem> OrderItems { get; set; } = new List<SalesOrderItem>();
