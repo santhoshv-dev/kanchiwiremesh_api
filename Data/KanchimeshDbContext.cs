@@ -75,7 +75,7 @@ public sealed class KanchimeshDbContext(DbContextOptions<KanchimeshDbContext> op
             entity.Property(x => x.Unit).HasMaxLength(30).IsRequired();
             entity.Property(x => x.Description).HasMaxLength(2000);
             entity.Property(x => x.Rate).HasPrecision(18, 2);
-            entity.Property(x => x.GstRate).HasPrecision(5, 2);
+            entity.Property(x => x.IgstRate).HasPrecision(5, 2); entity.Property(x => x.SgstRate).HasPrecision(5, 2); entity.Property(x => x.CgstRate).HasPrecision(5, 2);
             entity.Property(x => x.Width).HasPrecision(18, 3);
             entity.Property(x => x.Length).HasPrecision(18, 3);
             entity.Property(x => x.QuantityOnHand).HasPrecision(18, 3).HasDefaultValue(0m);
@@ -165,10 +165,11 @@ public sealed class KanchimeshDbContext(DbContextOptions<KanchimeshDbContext> op
         modelBuilder.Entity<SalesOrder>(entity =>
         {
             entity.HasIndex(x => x.OrderNumber).IsUnique();
-            entity.Property(x => x.OrderNumber).HasMaxLength(48).IsRequired();
+            entity.Property(x => x.OrderNumber).HasMaxLength(64).IsRequired();
             entity.Property(x => x.Status).HasMaxLength(30).IsRequired();
             entity.Property(x => x.Notes).HasMaxLength(2000);
-            entity.Property(x => x.Subtotal).HasPrecision(18, 2);
+            entity.Property(x => x.GstType).HasMaxLength(30);
+            entity.Property(x => x.Subtotal).HasPrecision(18, 3);
             entity.Property(x => x.DiscountAmount).HasPrecision(18, 2);
             entity.Property(x => x.FreightAmount).HasPrecision(18, 2);
             entity.Property(x => x.TaxAmount).HasPrecision(18, 2);
@@ -186,7 +187,7 @@ public sealed class KanchimeshDbContext(DbContextOptions<KanchimeshDbContext> op
             entity.Property(x => x.Unit).HasMaxLength(30).IsRequired();
             entity.Property(x => x.Quantity).HasPrecision(18, 3);
             entity.Property(x => x.Rate).HasPrecision(18, 2);
-            entity.Property(x => x.GstRate).HasPrecision(5, 2);
+            entity.Property(x => x.IgstRate).HasPrecision(5, 2); entity.Property(x => x.SgstRate).HasPrecision(5, 2); entity.Property(x => x.CgstRate).HasPrecision(5, 2);
             entity.Property(x => x.LineSubtotal).HasPrecision(18, 2);
             entity.Property(x => x.TaxAmount).HasPrecision(18, 2);
             entity.Property(x => x.LineTotal).HasPrecision(18, 2);

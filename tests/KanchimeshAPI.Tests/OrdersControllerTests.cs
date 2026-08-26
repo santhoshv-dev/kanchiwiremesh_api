@@ -78,7 +78,7 @@ public sealed class OrdersControllerTests
                     Quantity = 1m,
                     Unit = "pcs",
                     Rate = 1000m,
-                    GstRate = 18m,
+                    IgstRate = 18m, SgstRate = 0m, CgstRate = 0m,
                     LineSubtotal = 1000m,
                     TaxAmount = 180m,
                     LineTotal = 1180m,
@@ -111,7 +111,7 @@ public sealed class OrdersControllerTests
                 Quantity = 1m,
                 Unit = "pcs",
                 Rate = 1000m,
-                GstRate = 18m,
+                IgstRate = 18m, SgstRate = 0m, CgstRate = 0m,
             },
         ],
     };

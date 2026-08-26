@@ -4,6 +4,7 @@ using KanchimeshAPI.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace KanchimeshAPI.Migrations
 {
     [DbContext(typeof(KanchimeshDbContext))]
-    partial class KanchimeshDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260826134925_Initial2")]
+    partial class Initial2
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -472,10 +475,6 @@ namespace KanchimeshAPI.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
 
-                    b.Property<decimal>("CgstRate")
-                        .HasPrecision(5, 2)
-                        .HasColumnType("decimal(5,2)");
-
                     b.Property<DateTime>("CreatedAtUtc")
                         .HasColumnType("datetime2");
 
@@ -483,7 +482,7 @@ namespace KanchimeshAPI.Migrations
                         .HasMaxLength(2000)
                         .HasColumnType("nvarchar(2000)");
 
-                    b.Property<decimal>("IgstRate")
+                    b.Property<decimal>("GstRate")
                         .HasPrecision(5, 2)
                         .HasColumnType("decimal(5,2)");
 
@@ -532,10 +531,6 @@ namespace KanchimeshAPI.Migrations
                         .IsConcurrencyToken()
                         .ValueGeneratedOnAddOrUpdate()
                         .HasColumnType("rowversion");
-
-                    b.Property<decimal>("SgstRate")
-                        .HasPrecision(5, 2)
-                        .HasColumnType("decimal(5,2)");
 
                     b.Property<decimal>("TotalSold")
                         .ValueGeneratedOnAdd()
@@ -654,16 +649,12 @@ namespace KanchimeshAPI.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
-                    b.Property<decimal>("CgstRate")
-                        .HasPrecision(5, 2)
-                        .HasColumnType("decimal(5,2)");
-
                     b.Property<string>("Description")
                         .IsRequired()
                         .HasMaxLength(300)
                         .HasColumnType("nvarchar(300)");
 
-                    b.Property<decimal>("IgstRate")
+                    b.Property<decimal>("GstRate")
                         .HasPrecision(5, 2)
                         .HasColumnType("decimal(5,2)");
 
@@ -688,10 +679,6 @@ namespace KanchimeshAPI.Migrations
 
                     b.Property<Guid>("SalesOrderId")
                         .HasColumnType("uniqueidentifier");
-
-                    b.Property<decimal>("SgstRate")
-                        .HasPrecision(5, 2)
-                        .HasColumnType("decimal(5,2)");
 
                     b.Property<string>("Specification")
                         .HasMaxLength(1000)

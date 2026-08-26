@@ -47,7 +47,7 @@ public sealed class ProductRequest
     [Range(typeof(decimal), "0.001", "999999999999999")] public decimal? Length { get; init; }
     [Required, StringLength(30)] public string Unit { get; init; } = "pcs";
     [Range(typeof(decimal), "0", "999999999999999")] public decimal Rate { get; init; }
-    [Range(typeof(decimal), "0", "28")] public decimal GstRate { get; init; } = 18m;
+    [Range(typeof(decimal), "0", "100")] public decimal IgstRate { get; init; } [Range(typeof(decimal), "0", "100")] public decimal SgstRate { get; init; } [Range(typeof(decimal), "0", "100")] public decimal CgstRate { get; init; }
     [Range(typeof(decimal), "0", "999999999999999")] public decimal ReorderLevel { get; init; }
     // Applied only when a product is first created. Later changes must use the
     // stock adjustment endpoint so the inventory ledger remains complete.
@@ -109,7 +109,7 @@ public sealed class OrderItemRequest
     [Range(typeof(decimal), "0.001", "999999999999999")] public decimal Quantity { get; init; }
     [Required, StringLength(30)] public string Unit { get; init; } = "pcs";
     [Range(typeof(decimal), "0", "999999999999999")] public decimal Rate { get; init; }
-    [Range(typeof(decimal), "0", "28")] public decimal GstRate { get; init; } = 18m;
+    [Range(typeof(decimal), "0", "100")] public decimal IgstRate { get; init; } [Range(typeof(decimal), "0", "100")] public decimal SgstRate { get; init; } [Range(typeof(decimal), "0", "100")] public decimal CgstRate { get; init; }
 }
 
 public sealed class OrderRequest
@@ -127,6 +127,7 @@ public sealed class OrderRequest
     [StringLength(2000)] public string? Notes { get; init; }
     [Range(typeof(decimal), "0", "999999999999999")] public decimal DiscountAmount { get; init; }
     [Range(typeof(decimal), "0", "999999999999999")] public decimal FreightAmount { get; init; }
+    [StringLength(30)] public string GstType { get; init; } = "IGST";
     public List<OrderItemRequest> Items { get; set; } = [];
 }
 

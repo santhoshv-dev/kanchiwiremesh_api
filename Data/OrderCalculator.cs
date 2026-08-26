@@ -9,7 +9,7 @@ public static class OrderCalculator
         foreach (var item in order.Items)
         {
             item.LineSubtotal = Round(item.Quantity * item.Rate);
-            item.TaxAmount = Round(item.LineSubtotal * item.GstRate / 100m);
+            item.TaxAmount = Round(item.LineSubtotal * (item.IgstRate + item.SgstRate + item.CgstRate) / 100m);
             item.LineTotal = Round(item.LineSubtotal + item.TaxAmount);
         }
 

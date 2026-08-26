@@ -63,7 +63,7 @@ public sealed class Product : AuditableEntity
     public decimal? Length { get; set; }
     public string Unit { get; set; } = "pcs";
     public decimal Rate { get; set; }
-    public decimal GstRate { get; set; } = 18m;
+    public decimal IgstRate { get; set; } = 18m; public decimal SgstRate { get; set; } = 9m; public decimal CgstRate { get; set; } = 9m;
     /// <summary>
     /// Current physical quantity available for sale. Changes are recorded in
     /// <see cref="StockMovements"/> so the on-hand value can be audited.
@@ -180,6 +180,7 @@ public sealed class SalesOrder : AuditableEntity
     public decimal DiscountAmount { get; set; }
     public decimal FreightAmount { get; set; }
     public decimal TaxAmount { get; set; }
+    public string GstType { get; set; } = "IGST";
     public decimal GrandTotal { get; set; }
 
     public ICollection<SalesOrderItem> Items { get; set; } = new List<SalesOrderItem>();
@@ -198,7 +199,9 @@ public sealed class SalesOrderItem
     public decimal Quantity { get; set; }
     public string Unit { get; set; } = "pcs";
     public decimal Rate { get; set; }
-    public decimal GstRate { get; set; }
+    public decimal IgstRate { get; set; }
+    public decimal SgstRate { get; set; }
+    public decimal CgstRate { get; set; }
     public decimal LineSubtotal { get; set; }
     public decimal TaxAmount { get; set; }
     public decimal LineTotal { get; set; }

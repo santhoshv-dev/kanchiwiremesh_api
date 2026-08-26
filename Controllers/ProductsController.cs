@@ -138,7 +138,7 @@ public sealed class ProductsController(KanchimeshDbContext database) : ApiContro
         product.Length = request.Length;
         product.Unit = request.Unit.Trim();
         product.Rate = request.Rate;
-        product.GstRate = request.GstRate;
+        product.IgstRate = request.IgstRate; product.SgstRate = request.SgstRate; product.CgstRate = request.CgstRate;
         product.ReorderLevel = request.ReorderLevel;
         product.Description = Null(request.Description);
         product.IsActive = request.IsActive;

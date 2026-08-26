@@ -99,7 +99,6 @@ public sealed class OrdersController(KanchimeshDbContext database) : ApiControll
             ? await database.Database.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken)
             : null;
         var existingOrderNumbers = await database.SalesOrders
-            .Where(o => o.OrderNumber.StartsWith("ERH"))
             .Select(o => o.OrderNumber)
             .ToListAsync(cancellationToken);
 
@@ -107,14 +106,13 @@ public sealed class OrdersController(KanchimeshDbContext database) : ApiControll
         if (existingOrderNumbers.Count > 0)
         {
             var maxNum = existingOrderNumbers
-                .Select(n => n.Substring(3))
                 .Select(n => int.TryParse(n, out var num) ? num : 0)
                 .DefaultIfEmpty(0)
                 .Max();
             nextNumber = maxNum + 1;
         }
 
-        var order = new SalesOrder { OrderNumber = $"ERH{nextNumber}" };
+        var order = new SalesOrder { OrderNumber = nextNumber.ToString() };
         ReplaceOrderValues(order, request, status);
         database.SalesOrders.Add(order);
         await database.SaveChangesAsync(cancellationToken);
@@ -325,7 +323,7 @@ public sealed class OrdersController(KanchimeshDbContext database) : ApiControll
                     Quantity = 1m,
                     Unit = "pcs",
                     Rate = request.Amount.Value,
-                    GstRate = 0m
+                    IgstRate = 0m, SgstRate = 0m, CgstRate = 0m
                 }
             ];
         }
@@ -347,7 +345,7 @@ public sealed class OrdersController(KanchimeshDbContext database) : ApiControll
                 Quantity = item.Quantity,
                 Unit = item.Unit.Trim(),
                 Rate = item.Rate,
-                GstRate = item.GstRate
+                IgstRate = item.IgstRate, SgstRate = item.SgstRate, CgstRate = item.CgstRate
             });
         }
 
@@ -356,6 +354,7 @@ public sealed class OrdersController(KanchimeshDbContext database) : ApiControll
         order.ExpectedDeliveryDate = request.ExpectedDeliveryDate;
         order.Status = status;
         order.Notes = Null(request.Notes);
+        order.GstType = Null(request.GstType) ?? "IGST";
         order.DiscountAmount = request.DiscountAmount;
         order.FreightAmount = request.FreightAmount;
         OrderCalculator.Recalculate(order);
@@ -402,7 +401,7 @@ public sealed class OrdersController(KanchimeshDbContext database) : ApiControll
         return new OrderDetailDto(
             order.Id, order.OrderNumber, order.CustomerId, summary.CustomerName, summary.ProductName, order.OrderDate,
             order.ExpectedDeliveryDate, order.Status, order.Notes, order.Subtotal, order.DiscountAmount,
-            order.FreightAmount, order.TaxAmount, order.GrandTotal, summary.PaidAmount, summary.Outstanding,
+            order.FreightAmount, order.TaxAmount, order.GstType, order.GrandTotal, summary.PaidAmount, summary.Outstanding,
             order.Items.OrderBy(item => item.Id).Select(item => item.ToDto()).ToList(),
             order.CreatedAtUtc, order.UpdatedAtUtc);
     }
