@@ -10,6 +10,48 @@ namespace KanchimeshAPI.Tests;
 public sealed class OrdersControllerTests
 {
     [Fact]
+    public async Task CreateOrder_CreatesAndReturnsTheOrder()
+    {
+        await using var database = CreateDatabase();
+        var customer = new Customer
+        {
+            CustomerCode = "CUS-CREATE",
+            ContactName = "Create Customer",
+            Phone = "9876543210",
+        };
+        database.Customers.Add(customer);
+        await database.SaveChangesAsync();
+        var controller = new OrdersController(database);
+
+        var response = await controller.CreateOrder(
+            new OrderRequest
+            {
+                CustomerId = customer.Id,
+                OrderDate = new DateOnly(2026, 8, 26),
+                Status = "New",
+                Items =
+                [
+                    new OrderItemRequest
+                    {
+                        Description = "Wire mesh",
+                        Quantity = 2m,
+                        Unit = "pcs",
+                        Rate = 100m,
+                        IgstRate = 18m,
+                    },
+                ],
+            },
+            CancellationToken.None);
+
+        var created = Assert.IsType<CreatedAtActionResult>(response.Result);
+        var detail = Assert.IsType<OrderDetailDto>(created.Value);
+        Assert.Equal("1", detail.OrderNumber);
+        Assert.Equal(236m, detail.GrandTotal);
+        var persisted = await database.SalesOrders.AsNoTracking().SingleAsync();
+        Assert.Equal(customer.Id, persisted.CustomerId);
+    }
+
+    [Fact]
     public async Task FullUpdate_CannotCancelAnOrderWithRecordedPayments()
     {
         await using var database = CreateDatabase();

@@ -95,33 +95,41 @@ public sealed class OrdersController(KanchimeshDbContext database) : ApiControll
             return ValidationError(relationError.Value.Field, relationError.Value.Message);
         }
 
-        await using var numberAllocationTransaction = database.Database.IsRelational()
-            ? await database.Database.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken)
-            : null;
-        var existingOrderNumbers = await database.SalesOrders
-            .Select(o => o.OrderNumber)
-            .ToListAsync(cancellationToken);
-
-        int nextNumber = 1;
-        if (existingOrderNumbers.Count > 0)
+        var orderId = Guid.NewGuid();
+        if (database.Database.IsRelational())
         {
-            var maxNum = existingOrderNumbers
-                .Select(n => int.TryParse(n, out var num) ? num : 0)
-                .DefaultIfEmpty(0)
-                .Max();
-            nextNumber = maxNum + 1;
+            // SQL Server retry support is configured on the context. Keep the
+            // whole serializable allocation transaction inside its execution
+            // strategy and verify a possibly successful commit before retrying.
+            await ExecutionStrategyExtensions.ExecuteInTransactionAsync<Guid, Guid>(
+                database.Database.CreateExecutionStrategy(),
+                orderId,
+                async (id, retryCancellationToken) =>
+                {
+                    // A retry reuses this DbContext, so discard entities left
+                    // over from an interrupted attempt before trying again.
+                    database.ChangeTracker.Clear();
+                    await SaveNewOrder(id, request, status, retryCancellationToken);
+                    return id;
+                },
+                (id, retryCancellationToken) => database.SalesOrders
+                    .AsNoTracking()
+                    .AnyAsync(order => order.Id == id, retryCancellationToken),
+                (context, retryCancellationToken) => context.Database
+                    .BeginTransactionAsync(IsolationLevel.Serializable, retryCancellationToken),
+                cancellationToken);
+        }
+        else
+        {
+            await SaveNewOrder(orderId, request, status, cancellationToken);
         }
 
-        var order = new SalesOrder { OrderNumber = nextNumber.ToString() };
-        ReplaceOrderValues(order, request, status);
-        database.SalesOrders.Add(order);
-        await database.SaveChangesAsync(cancellationToken);
-        if (numberAllocationTransaction is not null)
+        var order = await GetOrderGraph(orderId, tracking: false, cancellationToken);
+        if (order is null)
         {
-            await numberAllocationTransaction.CommitAsync(cancellationToken);
+            throw new InvalidOperationException("The newly created order could not be reloaded.");
         }
 
-        await database.Entry(order).Reference(item => item.Customer).LoadAsync(cancellationToken);
         return CreatedAtAction(nameof(GetOrder), new { order.Id }, ToDetailDto(order));
     }
 
@@ -360,6 +368,25 @@ public sealed class OrdersController(KanchimeshDbContext database) : ApiControll
         OrderCalculator.Recalculate(order);
     }
 
+    private async Task SaveNewOrder(
+        Guid orderId,
+        OrderRequest request,
+        string status,
+        CancellationToken cancellationToken)
+    {
+        var existingOrderNumbers = await database.SalesOrders.AsNoTracking()
+            .Select(order => order.OrderNumber)
+            .ToListAsync(cancellationToken);
+        var order = new SalesOrder
+        {
+            Id = orderId,
+            OrderNumber = GetNextOrderNumber(existingOrderNumbers),
+        };
+        ReplaceOrderValues(order, request, status);
+        database.SalesOrders.Add(order);
+        await database.SaveChangesAsync(cancellationToken);
+    }
+
     private async Task<SalesOrder?> GetOrderGraph(Guid id, bool tracking, CancellationToken cancellationToken)
     {
         IQueryable<SalesOrder> query = database.SalesOrders
@@ -377,6 +404,15 @@ public sealed class OrdersController(KanchimeshDbContext database) : ApiControll
 
     private static bool CannotCancel(string status, SalesOrder order) =>
         string.Equals(status, "Cancelled", StringComparison.OrdinalIgnoreCase) && order.Payments.Count > 0;
+
+    private static string GetNextOrderNumber(IEnumerable<string> orderNumbers)
+    {
+        var maxNumber = orderNumbers
+            .Select(number => int.TryParse(number, out var parsed) ? parsed : 0)
+            .DefaultIfEmpty(0)
+            .Max();
+        return checked(maxNumber + 1).ToString();
+    }
 
     private ConflictObjectResult PaidOrderCancellationConflict() => Conflict(new ProblemDetails
     {
