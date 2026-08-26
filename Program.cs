@@ -302,27 +302,6 @@ await using (var scope = app.Services.CreateAsyncScope())
     }
     else if (applyMigrationsOnStartup)
     {
-        // Fix missing EF Migrations History records so EF Core can pick up from where it left off
-        await database.Database.ExecuteSqlRawAsync(
-            "IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = '__EFMigrationsHistory') " +
-            "CREATE TABLE [__EFMigrationsHistory] ([MigrationId] nvarchar(150) NOT NULL, [ProductVersion] nvarchar(32) NOT NULL, CONSTRAINT [PK___EFMigrationsHistory] PRIMARY KEY ([MigrationId]));"
-        );
-        
-        var migrations = new[] {
-            "20260813151835_InitialProductionSchema",
-            "20260822121500_AddEnquiryEmailDeliveryJobsAndIdempotency",
-            "20260822143000_DisableForcedPasswordChanges",
-            "20260822150000_AddInventoryStockMonitoring"
-        };
-        foreach (var mig in migrations)
-        {
-            await database.Database.ExecuteSqlRawAsync(
-                $"IF NOT EXISTS (SELECT * FROM [__EFMigrationsHistory] WHERE MigrationId = '{mig}') " +
-                $"INSERT INTO [__EFMigrationsHistory] (MigrationId, ProductVersion) VALUES ('{mig}', '8.0.8');"
-            );
-        }
-
-        // Apply all pending migrations (AddProductStockFields, AddGstTypeToSalesOrder, AddExplicitGstColumns)
         await database.Database.MigrateAsync();
         databaseIsReady = true;
     }
