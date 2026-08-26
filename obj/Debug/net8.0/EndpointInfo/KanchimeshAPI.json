@@ -3629,6 +3629,10 @@
             "type": "number",
             "format": "double"
           },
+          "gstType": {
+            "type": "string",
+            "nullable": true
+          },
           "grandTotal": {
             "type": "number",
             "format": "double"
@@ -3691,7 +3695,15 @@
             "type": "number",
             "format": "double"
           },
-          "gstRate": {
+          "igstRate": {
+            "type": "number",
+            "format": "double"
+          },
+          "sgstRate": {
+            "type": "number",
+            "format": "double"
+          },
+          "cgstRate": {
             "type": "number",
             "format": "double"
           },
@@ -3750,8 +3762,20 @@
             "type": "number",
             "format": "double"
           },
-          "gstRate": {
-            "maximum": 28,
+          "igstRate": {
+            "maximum": 100,
+            "minimum": 0,
+            "type": "number",
+            "format": "double"
+          },
+          "sgstRate": {
+            "maximum": 100,
+            "minimum": 0,
+            "type": "number",
+            "format": "double"
+          },
+          "cgstRate": {
+            "maximum": 100,
             "minimum": 0,
             "type": "number",
             "format": "double"
@@ -3831,6 +3855,12 @@
             "minimum": 0,
             "type": "number",
             "format": "double"
+          },
+          "gstType": {
+            "maxLength": 30,
+            "minLength": 0,
+            "type": "string",
+            "nullable": true
           },
           "items": {
             "type": "array",
@@ -4201,11 +4231,27 @@
             "type": "number",
             "format": "double"
           },
-          "gstRate": {
+          "igstRate": {
+            "type": "number",
+            "format": "double"
+          },
+          "sgstRate": {
+            "type": "number",
+            "format": "double"
+          },
+          "cgstRate": {
             "type": "number",
             "format": "double"
           },
           "quantityOnHand": {
+            "type": "number",
+            "format": "double"
+          },
+          "totalStockAdded": {
+            "type": "number",
+            "format": "double"
+          },
+          "totalSold": {
             "type": "number",
             "format": "double"
           },
@@ -4324,8 +4370,20 @@
             "type": "number",
             "format": "double"
           },
-          "gstRate": {
-            "maximum": 28,
+          "igstRate": {
+            "maximum": 100,
+            "minimum": 0,
+            "type": "number",
+            "format": "double"
+          },
+          "sgstRate": {
+            "maximum": 100,
+            "minimum": 0,
+            "type": "number",
+            "format": "double"
+          },
+          "cgstRate": {
+            "maximum": 100,
             "minimum": 0,
             "type": "number",
             "format": "double"
