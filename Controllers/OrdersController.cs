@@ -67,12 +67,25 @@ public sealed class OrdersController(KanchimeshDbContext database) : ApiControll
         return order is null ? NotFound() : Ok(ToDetailDto(order));
     }
 
-    // Invoice screens can use the same immutable, tax-inclusive order payload without a separate PDF service.
+    // Invoice screens receive the same tax-inclusive order payload plus the
+    // current shared company profile, so address and payment instructions stay
+    // consistent wherever an invoice is generated.
     [HttpGet("{id:guid}/invoice")]
     [ProducesResponseType(typeof(OrderDetailDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<ActionResult<OrderDetailDto>> GetInvoiceData(Guid id, CancellationToken cancellationToken) =>
-        await GetOrder(id, cancellationToken);
+    public async Task<ActionResult<OrderDetailDto>> GetInvoiceData(Guid id, CancellationToken cancellationToken)
+    {
+        var order = await GetOrderGraph(id, tracking: false, cancellationToken);
+        if (order is null)
+        {
+            return NotFound();
+        }
+
+        var company = await database.CompanyProfiles
+            .AsNoTracking()
+            .SingleOrDefaultAsync(item => item.Id == CompanyProfile.DefaultId, cancellationToken);
+        return Ok(ToDetailDto(order, CompanySettingsController.ToDto(company)));
+    }
 
     [HttpPost]
     [ProducesResponseType(typeof(OrderDetailDto), StatusCodes.Status201Created)]
@@ -184,6 +197,16 @@ public sealed class OrdersController(KanchimeshDbContext database) : ApiControll
             return NotFound();
         }
 
+        if (!string.Equals(
+                GetFinancialYear(order.OrderDate),
+                GetFinancialYear(request.OrderDate),
+                StringComparison.Ordinal))
+        {
+            return ValidationError(
+                nameof(request.OrderDate),
+                "Order date cannot be moved to a different financial year after its invoice number has been issued.");
+        }
+
         if (order.Payments.Count > 0 && order.CustomerId != request.CustomerId)
         {
             return ValidationError(nameof(request.CustomerId), "The customer cannot be changed after payments have been recorded for an order.");
@@ -237,32 +260,27 @@ public sealed class OrdersController(KanchimeshDbContext database) : ApiControll
     }
 
     [HttpDelete("{id:guid}")]
-    [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
     public async Task<IActionResult> DeleteOrder(Guid id, CancellationToken cancellationToken)
     {
         var order = await database.SalesOrders
-            .Include(item => item.Payments)
             .SingleOrDefaultAsync(item => item.Id == id, cancellationToken);
         if (order is null)
         {
             return NotFound();
         }
 
-        if (order.Payments.Count > 0)
+        // An order number is now an issued invoice number. Retaining cancelled
+        // orders prevents a printed number from being reused and preserves the
+        // audit trail; cancellation also restores stock through the normal
+        // status workflow.
+        return Conflict(new ProblemDetails
         {
-            return Conflict(new ProblemDetails
-            {
-                Status = StatusCodes.Status409Conflict,
-                Title = "This order has recorded payments.",
-                Detail = "Cancel the order or delete/reassign its payments before deleting it."
-            });
-        }
-
-        database.SalesOrders.Remove(order);
-        await database.SaveChangesAsync(cancellationToken);
-        return NoContent();
+            Status = StatusCodes.Status409Conflict,
+            Title = "Issued orders cannot be deleted.",
+            Detail = "Cancel the order instead to preserve its invoice number and restore its stock."
+        });
     }
 
     private async Task<(string Field, string Message)?> ValidateRelations(OrderRequest request, CancellationToken cancellationToken)
@@ -429,8 +447,9 @@ public sealed class OrdersController(KanchimeshDbContext database) : ApiControll
         order.Items.Clear();
         foreach (var item in request.Items)
         {
-            order.Items.Add(new SalesOrderItem
+            var replacement = new SalesOrderItem
             {
+                SalesOrderId = order.Id,
                 ProductId = item.ProductId,
                 Description = item.Description.Trim(),
                 Specification = Null(item.Specification),
@@ -438,7 +457,14 @@ public sealed class OrdersController(KanchimeshDbContext database) : ApiControll
                 Unit = item.Unit.Trim(),
                 Rate = item.Rate,
                 IgstRate = item.IgstRate, SgstRate = item.SgstRate, CgstRate = item.CgstRate
-            });
+            };
+
+            // Adding an untracked child only through a navigation collection on
+            // an existing order makes EF treat its generated GUID as an update
+            // in some providers. Track it explicitly as Added so changing an
+            // order quantity (for example 20 to 30) reliably replaces the old
+            // line and lets the stock adjustment code apply the net delta.
+            database.SalesOrderItems.Add(replacement);
         }
 
         order.CustomerId = request.CustomerId;
@@ -464,10 +490,13 @@ public sealed class OrdersController(KanchimeshDbContext database) : ApiControll
         var order = new SalesOrder
         {
             Id = orderId,
-            OrderNumber = GetNextOrderNumber(existingOrderNumbers),
+            OrderNumber = GetNextOrderNumber(request.OrderDate, existingOrderNumbers),
         };
-        ReplaceOrderValues(order, request, status);
+        // Track the parent before adding line items. That gives EF a principal
+        // for relationship fix-up and ensures each new item is tracked as an
+        // insert rather than an update.
         database.SalesOrders.Add(order);
+        ReplaceOrderValues(order, request, status);
         
         if (request.PaidAmount > 0)
         {
@@ -507,10 +536,13 @@ public sealed class OrdersController(KanchimeshDbContext database) : ApiControll
     private static bool CannotCancel(string status, SalesOrder order) =>
         string.Equals(status, "Cancelled", StringComparison.OrdinalIgnoreCase) && order.Payments.Count > 0;
 
-    private static string GetNextOrderNumber(IEnumerable<string> orderNumbers)
+    private static string GetNextOrderNumber(DateOnly orderDate, IEnumerable<string> orderNumbers)
     {
+        var financialYear = GetFinancialYear(orderDate);
         var maxNumber = orderNumbers
-            .Select(number => int.TryParse(number, out var parsed) ? parsed : 0)
+            .Select(number => TryGetInvoiceSequence(number, financialYear))
+            .Where(number => number.HasValue)
+            .Select(number => number!.Value)
             .DefaultIfEmpty(0)
             .Max();
         if (maxNumber == int.MaxValue)
@@ -518,7 +550,30 @@ public sealed class OrdersController(KanchimeshDbContext database) : ApiControll
             throw new OrderNumberExhaustedException();
         }
 
-        return (maxNumber + 1).ToString();
+        return $"{maxNumber + 1:D2}/{financialYear}";
+    }
+
+    private static string GetFinancialYear(DateOnly date)
+    {
+        // India uses an April-to-March financial year. For example, an August
+        // 2026 order belongs to FY 2026-27 while a January 2027 order remains
+        // in the same FY.
+        var startYear = date.Month >= 4 ? date.Year : date.Year - 1;
+        return $"{startYear % 100:D2}-{(startYear + 1) % 100:D2}";
+    }
+
+    private static int? TryGetInvoiceSequence(string orderNumber, string financialYear)
+    {
+        var suffix = $"/{financialYear}";
+        if (!orderNumber.EndsWith(suffix, StringComparison.Ordinal))
+        {
+            return null;
+        }
+
+        var sequenceText = orderNumber[..^suffix.Length];
+        return int.TryParse(sequenceText, out var sequence) && sequence > 0
+            ? sequence
+            : null;
     }
 
     private sealed class OrderNumberExhaustedException : Exception
@@ -528,8 +583,8 @@ public sealed class OrdersController(KanchimeshDbContext database) : ApiControll
     private ConflictObjectResult OrderNumberExhaustedConflict() => Conflict(new ProblemDetails
     {
         Status = StatusCodes.Status409Conflict,
-        Title = "No additional numeric order numbers are available.",
-        Detail = "Contact support to configure a new order-number sequence.",
+        Title = "No additional invoice numbers are available for this financial year.",
+        Detail = "Contact support to configure a new invoice-number sequence.",
     });
 
     private ConflictObjectResult PaidOrderCancellationConflict() => Conflict(new ProblemDetails
@@ -549,7 +604,7 @@ public sealed class OrdersController(KanchimeshDbContext database) : ApiControll
             paid, Math.Max(order.GrandTotal - paid, 0m), order.UpdatedAtUtc);
     }
 
-    private static OrderDetailDto ToDetailDto(SalesOrder order)
+    private static OrderDetailDto ToDetailDto(SalesOrder order, CompanyProfileDto? company = null)
     {
         var summary = ToSummaryDto(order);
         return new OrderDetailDto(
@@ -557,7 +612,7 @@ public sealed class OrdersController(KanchimeshDbContext database) : ApiControll
             order.ExpectedDeliveryDate, order.Status, order.Notes, order.Subtotal, order.DiscountAmount,
             order.FreightAmount, order.TaxAmount, order.GstType, order.GrandTotal, summary.PaidAmount, summary.Outstanding,
             order.Items.OrderBy(item => item.Id).Select(item => item.ToDto()).ToList(),
-            order.CreatedAtUtc, order.UpdatedAtUtc);
+            order.CreatedAtUtc, order.UpdatedAtUtc, company);
     }
 
     private static string? Null(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();

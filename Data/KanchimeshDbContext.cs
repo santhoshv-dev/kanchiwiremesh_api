@@ -6,6 +6,7 @@ namespace KanchimeshAPI.Data;
 public sealed class KanchimeshDbContext(DbContextOptions<KanchimeshDbContext> options) : DbContext(options)
 {
     public DbSet<ApplicationUser> ApplicationUsers => Set<ApplicationUser>();
+    public DbSet<CompanyProfile> CompanyProfiles => Set<CompanyProfile>();
     public DbSet<Customer> Customers => Set<Customer>();
     public DbSet<Product> Products => Set<Product>();
 
@@ -21,6 +22,7 @@ public sealed class KanchimeshDbContext(DbContextOptions<KanchimeshDbContext> op
         base.OnModelCreating(modelBuilder);
 
         ConfigureAuditEntity<ApplicationUser>(modelBuilder.Entity<ApplicationUser>());
+        ConfigureAuditEntity<CompanyProfile>(modelBuilder.Entity<CompanyProfile>());
         ConfigureAuditEntity<Customer>(modelBuilder.Entity<Customer>());
         ConfigureAuditEntity<Product>(modelBuilder.Entity<Product>());
 
@@ -41,6 +43,25 @@ public sealed class KanchimeshDbContext(DbContextOptions<KanchimeshDbContext> op
             entity.Property(x => x.LastLoginAtUtc).HasColumnType("datetime2");
             entity.Property(x => x.MustChangePassword).HasDefaultValue(false);
             entity.Property(x => x.IsActive).HasDefaultValue(true);
+        });
+
+        modelBuilder.Entity<CompanyProfile>(entity =>
+        {
+            entity.Property(x => x.CompanyName).HasMaxLength(180);
+            entity.Property(x => x.Address).HasMaxLength(500);
+            entity.Property(x => x.City).HasMaxLength(100);
+            entity.Property(x => x.District).HasMaxLength(100);
+            entity.Property(x => x.State).HasMaxLength(100);
+            entity.Property(x => x.PostalCode).HasMaxLength(15);
+            entity.Property(x => x.Phone).HasMaxLength(25);
+            entity.Property(x => x.Email).HasMaxLength(254);
+            entity.Property(x => x.GstNumber).HasMaxLength(32);
+            entity.Property(x => x.BankName).HasMaxLength(150);
+            entity.Property(x => x.BankAccountName).HasMaxLength(150);
+            entity.Property(x => x.BankAccountNumber).HasMaxLength(64);
+            entity.Property(x => x.BankIfscCode).HasMaxLength(20);
+            entity.Property(x => x.BankBranch).HasMaxLength(150);
+            entity.Property(x => x.UpiId).HasMaxLength(100);
         });
 
         modelBuilder.Entity<Customer>(entity =>
@@ -221,50 +242,69 @@ public sealed class KanchimeshDbContext(DbContextOptions<KanchimeshDbContext> op
     private async Task ProcessStockChanges(CancellationToken cancellationToken)
     {
         var orderEntries = ChangeTracker.Entries<SalesOrder>()
-            .Where(e => e.State == EntityState.Modified)
+            .Where(e => e.State == EntityState.Modified || e.State == EntityState.Deleted)
+            .ToList();
+        var itemEntries = ChangeTracker.Entries<SalesOrderItem>()
+            .Where(e => e.State == EntityState.Added || e.State == EntityState.Deleted)
             .ToList();
 
         foreach (var entry in orderEntries)
         {
-            string oldStatus = (string)entry.OriginalValues["Status"]!;
-            string newStatus = (string)entry.CurrentValues["Status"]!;
-
-            if (oldStatus != "Cancelled" && newStatus == "Cancelled")
+            var orderId = entry.Entity.Id;
+            var oldStatus = (string)entry.OriginalValues["Status"]!;
+            if (entry.State == EntityState.Deleted)
             {
-                var orderId = entry.Entity.Id;
-                var items = await SalesOrderItems.Where(i => i.SalesOrderId == orderId).Include(i => i.Product).ToListAsync(cancellationToken);
-                foreach (var item in items)
+                // Entity Framework cascades the line-item deletes in the
+                // database, so restore stock before the order disappears.
+                if (!IsCancelled(oldStatus))
                 {
-                    if (item.Product != null)
-                    {
-                        item.Product.QuantityOnHand += item.Quantity;
-                        item.Product.TotalSold -= item.Quantity;
-                    }
+                    await ApplyPersistedOrderItemStockAsync(orderId, consumeStock: false, cancellationToken);
                 }
+
+                continue;
             }
-            else if (oldStatus == "Cancelled" && newStatus != "Cancelled")
+
+            var newStatus = (string)entry.CurrentValues["Status"]!;
+
+            if (!IsCancelled(oldStatus) && IsCancelled(newStatus))
             {
-                var orderId = entry.Entity.Id;
-                var items = await SalesOrderItems.Where(i => i.SalesOrderId == orderId).Include(i => i.Product).ToListAsync(cancellationToken);
-                foreach (var item in items)
+                // Use persisted lines: a full update may replace the requested
+                // lines while cancelling, but a cancelled order must return the
+                // stock consumed by its original active version.
+                await ApplyPersistedOrderItemStockAsync(orderId, consumeStock: false, cancellationToken);
+            }
+            else if (IsCancelled(oldStatus) && !IsCancelled(newStatus))
+            {
+                var replacementItems = itemEntries
+                    .Where(item => item.State == EntityState.Added && item.Entity.SalesOrderId == orderId)
+                    .ToList();
+                if (replacementItems.Count == 0)
                 {
-                    if (item.Product != null)
+                    // A status-only reactivation consumes the saved lines.
+                    await ApplyPersistedOrderItemStockAsync(orderId, consumeStock: true, cancellationToken);
+                }
+                else
+                {
+                    // A full update replaces the cancelled lines. Consume the
+                    // new values, not the old database rows.
+                    foreach (var item in replacementItems)
                     {
-                        item.Product.QuantityOnHand -= item.Quantity;
-                        item.Product.TotalSold += item.Quantity;
+                        await ApplyStockDeltaAsync(
+                            item.Entity.ProductId,
+                            -item.Entity.Quantity,
+                            item.Entity.Quantity,
+                            cancellationToken);
                     }
                 }
             }
         }
 
-        var itemEntries = ChangeTracker.Entries<SalesOrderItem>()
-            .Where(e => e.State == EntityState.Added || e.State == EntityState.Deleted)
-            .ToList();
-
         foreach (var entry in itemEntries)
         {
             var item = entry.Entity;
-            var productId = entry.State == EntityState.Deleted ? (Guid)entry.OriginalValues["ProductId"]! : item.ProductId;
+            Guid? productId = entry.State == EntityState.Deleted
+                ? entry.OriginalValues["ProductId"] is Guid originalProductId ? originalProductId : null
+                : item.ProductId;
             var quantity = entry.State == EntityState.Deleted ? (decimal)entry.OriginalValues["Quantity"]! : item.Quantity;
             
             var orderId = entry.State == EntityState.Deleted ? (Guid)entry.OriginalValues["SalesOrderId"]! : item.SalesOrderId;
@@ -279,8 +319,10 @@ public sealed class KanchimeshDbContext(DbContextOptions<KanchimeshDbContext> op
                 {
                     string oldStatus = (string)orderEntry.OriginalValues["Status"]!;
                     string newStatus = (string)orderEntry.CurrentValues["Status"]!;
-                    if (oldStatus != newStatus && (oldStatus == "Cancelled" || newStatus == "Cancelled"))
+                    if (oldStatus != newStatus && (IsCancelled(oldStatus) || IsCancelled(newStatus)))
                     {
+                        // Status-transition stock was handled from the
+                        // appropriate old or replacement lines above.
                         continue;
                     }
                 }
@@ -291,24 +333,60 @@ public sealed class KanchimeshDbContext(DbContextOptions<KanchimeshDbContext> op
                 if (order != null) orderStatus = order.Status;
             }
 
-            if (orderStatus == "Cancelled" || orderStatus == "Deleted") continue;
+            if (IsCancelled(orderStatus) || orderStatus == "Deleted" || !productId.HasValue) continue;
 
-            var product = await Products.FindAsync(new object[] { productId }, cancellationToken);
-            if (product != null)
+            if (entry.State == EntityState.Added)
             {
-                if (entry.State == EntityState.Added)
-                {
-                    product.QuantityOnHand -= quantity;
-                    product.TotalSold += quantity;
-                }
-                else if (entry.State == EntityState.Deleted)
-                {
-                    product.QuantityOnHand += quantity;
-                    product.TotalSold -= quantity;
-                }
+                await ApplyStockDeltaAsync(productId, -quantity, quantity, cancellationToken);
+            }
+            else if (entry.State == EntityState.Deleted)
+            {
+                await ApplyStockDeltaAsync(productId, quantity, -quantity, cancellationToken);
             }
         }
     }
+
+    private async Task ApplyPersistedOrderItemStockAsync(
+        Guid orderId,
+        bool consumeStock,
+        CancellationToken cancellationToken)
+    {
+        var items = await SalesOrderItems
+            .AsNoTracking()
+            .Where(item => item.SalesOrderId == orderId)
+            .Select(item => new { item.ProductId, item.Quantity })
+            .ToListAsync(cancellationToken);
+        foreach (var item in items)
+        {
+            var quantityOnHandDelta = consumeStock ? -item.Quantity : item.Quantity;
+            var totalSoldDelta = consumeStock ? item.Quantity : -item.Quantity;
+            await ApplyStockDeltaAsync(item.ProductId, quantityOnHandDelta, totalSoldDelta, cancellationToken);
+        }
+    }
+
+    private async Task ApplyStockDeltaAsync(
+        Guid? productId,
+        decimal quantityOnHandDelta,
+        decimal totalSoldDelta,
+        CancellationToken cancellationToken)
+    {
+        if (!productId.HasValue)
+        {
+            return;
+        }
+
+        var product = await Products.FindAsync(new object[] { productId.Value }, cancellationToken);
+        if (product is null)
+        {
+            return;
+        }
+
+        product.QuantityOnHand += quantityOnHandDelta;
+        product.TotalSold += totalSoldDelta;
+    }
+
+    private static bool IsCancelled(string status) =>
+        string.Equals(status, "Cancelled", StringComparison.OrdinalIgnoreCase);
 
     private void StampAuditFields()
     {

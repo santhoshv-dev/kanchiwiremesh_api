@@ -27,6 +27,33 @@ public sealed class ApplicationUser : AuditableEntity
     public DateTime? LastLoginAtUtc { get; set; }
 }
 
+/// <summary>
+/// The single, business-wide profile shown on invoices. A fixed identifier is
+/// used so the application can safely create it on the first settings save
+/// without needing a separate tenant or user-specific settings model.
+/// </summary>
+public sealed class CompanyProfile : AuditableEntity
+{
+    public static readonly Guid DefaultId = new("6DDB0D40-9EC2-4F3D-9ED2-4EF2D40B4A01");
+
+    public string? CompanyName { get; set; }
+    public string? Address { get; set; }
+    public string? City { get; set; }
+    public string? District { get; set; }
+    public string? State { get; set; }
+    public string? PostalCode { get; set; }
+    public string? Phone { get; set; }
+    public string? Email { get; set; }
+    public string? GstNumber { get; set; }
+
+    public string? BankName { get; set; }
+    public string? BankAccountName { get; set; }
+    public string? BankAccountNumber { get; set; }
+    public string? BankIfscCode { get; set; }
+    public string? BankBranch { get; set; }
+    public string? UpiId { get; set; }
+}
+
 public sealed class Customer : AuditableEntity
 {
     public string CustomerCode { get; set; } = string.Empty;

@@ -45,7 +45,7 @@ public sealed class OrdersControllerTests
 
         var created = Assert.IsType<CreatedAtActionResult>(response.Result);
         var detail = Assert.IsType<OrderDetailDto>(created.Value);
-        Assert.Equal("1", detail.OrderNumber);
+        Assert.Equal("01/26-27", detail.OrderNumber);
         Assert.Equal(236m, detail.GrandTotal);
         var persisted = await database.SalesOrders.AsNoTracking().SingleAsync();
         Assert.Equal(customer.Id, persisted.CustomerId);
@@ -127,7 +127,7 @@ public sealed class OrdersControllerTests
     }
 
     [Fact]
-    public async Task CreateOrder_ReturnsConflictWhenNumericOrderNumbersAreExhausted()
+    public async Task CreateOrder_ReturnsConflictWhenFinancialYearInvoiceNumbersAreExhausted()
     {
         await using var database = CreateDatabase();
         var customer = new Customer
@@ -138,7 +138,7 @@ public sealed class OrdersControllerTests
         };
         database.SalesOrders.Add(new SalesOrder
         {
-            OrderNumber = int.MaxValue.ToString(),
+            OrderNumber = $"{int.MaxValue}/26-27",
             Customer = customer,
             Status = "Pending",
             OrderDate = new DateOnly(2026, 8, 27),
@@ -204,6 +204,364 @@ public sealed class OrdersControllerTests
         Assert.Equal(409, problem.Status);
         var persisted = await database.SalesOrders.AsNoTracking().SingleAsync(item => item.Id == order.Id);
         Assert.Equal("Pending", persisted.Status);
+    }
+
+    [Fact]
+    public async Task CreateOrder_ResetsTheInvoiceSequenceForANewFinancialYear()
+    {
+        await using var database = CreateDatabase();
+        var customer = new Customer
+        {
+            CustomerCode = "CUS-FY",
+            ContactName = "Financial Year Customer",
+            Phone = "9876543210",
+        };
+        database.Customers.Add(customer);
+        await database.SaveChangesAsync();
+        var controller = new OrdersController(database);
+
+        var first = await CreateSimpleOrder(controller, customer.Id, new DateOnly(2026, 4, 1));
+        var sameFinancialYear = await CreateSimpleOrder(controller, customer.Id, new DateOnly(2027, 3, 31));
+        var nextFinancialYear = await CreateSimpleOrder(controller, customer.Id, new DateOnly(2027, 4, 1));
+
+        Assert.Equal("01/26-27", first.OrderNumber);
+        Assert.Equal("02/26-27", sameFinancialYear.OrderNumber);
+        Assert.Equal("01/27-28", nextFinancialYear.OrderNumber);
+    }
+
+    [Fact]
+    public async Task UpdateOrder_ChangesAnExistingQuantityAndAppliesOnlyTheStockDifference()
+    {
+        await using var database = CreateDatabase();
+        var customer = new Customer
+        {
+            CustomerCode = "CUS-QUANTITY",
+            ContactName = "Quantity Customer",
+            Phone = "9876543210",
+        };
+        var product = new Product
+        {
+            ProductCode = "PRD-QUANTITY",
+            Name = "Quantity mesh",
+            Category = "Mesh",
+            Unit = "pcs",
+            QuantityOnHand = 100m,
+        };
+        var order = new SalesOrder
+        {
+            OrderNumber = "01/26-27",
+            Customer = customer,
+            OrderDate = new DateOnly(2026, 8, 27),
+            Status = "Pending",
+            Items =
+            [
+                new SalesOrderItem
+                {
+                    Product = product,
+                    Description = product.Name,
+                    Quantity = 20m,
+                    Unit = "pcs",
+                    Rate = 10m,
+                },
+            ],
+        };
+        OrderCalculator.Recalculate(order);
+        database.SalesOrders.Add(order);
+        await database.SaveChangesAsync();
+        database.ChangeTracker.Clear();
+
+        var controller = new OrdersController(database);
+        var response = await controller.UpdateOrder(
+            order.Id,
+            new OrderRequest
+            {
+                CustomerId = customer.Id,
+                OrderDate = order.OrderDate,
+                Status = "Pending",
+                Items =
+                [
+                    new OrderItemRequest
+                    {
+                        ProductId = product.Id,
+                        Description = product.Name,
+                        Quantity = 30m,
+                        Unit = "pcs",
+                        Rate = 10m,
+                    },
+                ],
+            },
+            CancellationToken.None);
+
+        var updated = Assert.IsType<OkObjectResult>(response.Result);
+        var detail = Assert.IsType<OrderDetailDto>(updated.Value);
+        Assert.Equal(30m, detail.Items.Single().Quantity);
+        Assert.Equal(300m, detail.GrandTotal);
+
+        database.ChangeTracker.Clear();
+        var persistedOrder = await database.SalesOrders
+            .Include(item => item.Items)
+            .SingleAsync(item => item.Id == order.Id);
+        var persistedProduct = await database.Products.SingleAsync(item => item.Id == product.Id);
+        Assert.Equal(30m, persistedOrder.Items.Single().Quantity);
+        Assert.Equal(300m, persistedOrder.GrandTotal);
+        Assert.Equal(70m, persistedProduct.QuantityOnHand);
+        Assert.Equal(30m, persistedProduct.TotalSold);
+    }
+
+    [Fact]
+    public async Task UpdateOrder_ChangesAManualLineQuantityWithoutTryingToAdjustStock()
+    {
+        await using var database = CreateDatabase();
+        var customer = new Customer
+        {
+            CustomerCode = "CUS-MANUAL-QUANTITY",
+            ContactName = "Manual Quantity Customer",
+            Phone = "9876543210",
+        };
+        database.Customers.Add(customer);
+        await database.SaveChangesAsync();
+        var controller = new OrdersController(database);
+        var created = await CreateSimpleOrder(controller, customer.Id, new DateOnly(2026, 8, 27));
+
+        var response = await controller.UpdateOrder(
+            created.Id,
+            new OrderRequest
+            {
+                CustomerId = customer.Id,
+                OrderDate = created.OrderDate,
+                Status = "Pending",
+                Items =
+                [
+                    new OrderItemRequest
+                    {
+                        Description = "Wire mesh",
+                        Quantity = 30m,
+                        Unit = "pcs",
+                        Rate = 100m,
+                    },
+                ],
+            },
+            CancellationToken.None);
+
+        var ok = Assert.IsType<OkObjectResult>(response.Result);
+        var updated = Assert.IsType<OrderDetailDto>(ok.Value);
+        Assert.Equal(30m, updated.Items.Single().Quantity);
+        Assert.Equal(3000m, updated.GrandTotal);
+    }
+
+    [Fact]
+    public async Task UpdateOrder_ReactivatesACancelledOrderUsingTheReplacementLineStock()
+    {
+        await using var database = CreateDatabase();
+        var customer = new Customer
+        {
+            CustomerCode = "CUS-REACTIVATE",
+            ContactName = "Reactivation Customer",
+            Phone = "9876543210",
+        };
+        var originalProduct = new Product
+        {
+            ProductCode = "PRD-ORIGINAL",
+            Name = "Original mesh",
+            Category = "Mesh",
+            Unit = "pcs",
+            QuantityOnHand = 100m,
+        };
+        var replacementProduct = new Product
+        {
+            ProductCode = "PRD-REPLACEMENT",
+            Name = "Replacement mesh",
+            Category = "Mesh",
+            Unit = "pcs",
+            QuantityOnHand = 100m,
+        };
+        var order = new SalesOrder
+        {
+            OrderNumber = "01/26-27",
+            Customer = customer,
+            OrderDate = new DateOnly(2026, 8, 27),
+            Status = "Pending",
+            Items =
+            [
+                new SalesOrderItem
+                {
+                    Product = originalProduct,
+                    Description = originalProduct.Name,
+                    Quantity = 20m,
+                    Unit = "pcs",
+                    Rate = 10m,
+                },
+            ],
+        };
+        OrderCalculator.Recalculate(order);
+        database.Products.Add(replacementProduct);
+        database.SalesOrders.Add(order);
+        await database.SaveChangesAsync();
+
+        var controller = new OrdersController(database);
+        var cancelled = await controller.UpdateStatus(
+            order.Id,
+            new OrderStatusRequest { Status = "Cancelled" },
+            CancellationToken.None);
+        Assert.IsType<OkObjectResult>(cancelled.Result);
+        database.ChangeTracker.Clear();
+
+        var reactivated = await controller.UpdateOrder(
+            order.Id,
+            new OrderRequest
+            {
+                CustomerId = customer.Id,
+                OrderDate = order.OrderDate,
+                Status = "Pending",
+                Items =
+                [
+                    new OrderItemRequest
+                    {
+                        ProductId = replacementProduct.Id,
+                        Description = replacementProduct.Name,
+                        Quantity = 30m,
+                        Unit = "pcs",
+                        Rate = 10m,
+                    },
+                ],
+            },
+            CancellationToken.None);
+
+        var ok = Assert.IsType<OkObjectResult>(reactivated.Result);
+        var detail = Assert.IsType<OrderDetailDto>(ok.Value);
+        Assert.Equal("Pending", detail.Status);
+        Assert.Equal(30m, detail.Items.Single().Quantity);
+
+        database.ChangeTracker.Clear();
+        var persistedOriginal = await database.Products.SingleAsync(item => item.Id == originalProduct.Id);
+        var persistedReplacement = await database.Products.SingleAsync(item => item.Id == replacementProduct.Id);
+        Assert.Equal(100m, persistedOriginal.QuantityOnHand);
+        Assert.Equal(0m, persistedOriginal.TotalSold);
+        Assert.Equal(70m, persistedReplacement.QuantityOnHand);
+        Assert.Equal(30m, persistedReplacement.TotalSold);
+    }
+
+    [Fact]
+    public async Task UpdateOrder_CannotMoveAnIssuedInvoiceIntoADifferentFinancialYear()
+    {
+        await using var database = CreateDatabase();
+        var customer = new Customer
+        {
+            CustomerCode = "CUS-INVOICE-DATE",
+            ContactName = "Invoice Date Customer",
+            Phone = "9876543210",
+        };
+        database.Customers.Add(customer);
+        await database.SaveChangesAsync();
+        var controller = new OrdersController(database);
+        var created = await CreateSimpleOrder(controller, customer.Id, new DateOnly(2026, 4, 1));
+
+        var response = await controller.UpdateOrder(
+            created.Id,
+            new OrderRequest
+            {
+                CustomerId = customer.Id,
+                OrderDate = new DateOnly(2027, 4, 1),
+                Status = "Pending",
+                Items =
+                [
+                    new OrderItemRequest
+                    {
+                        Description = "Wire mesh",
+                        Quantity = 1m,
+                        Unit = "pcs",
+                        Rate = 100m,
+                    },
+                ],
+            },
+            CancellationToken.None);
+
+        var badRequest = Assert.IsType<BadRequestObjectResult>(response.Result);
+        var problem = Assert.IsType<ValidationProblemDetails>(badRequest.Value);
+        Assert.Contains(nameof(OrderRequest.OrderDate), problem.Errors.Keys);
+
+        database.ChangeTracker.Clear();
+        var persisted = await database.SalesOrders.SingleAsync(item => item.Id == created.Id);
+        Assert.Equal(new DateOnly(2026, 4, 1), persisted.OrderDate);
+        Assert.Equal("01/26-27", persisted.OrderNumber);
+    }
+
+    [Fact]
+    public async Task DeleteOrder_ReturnsConflictToPreventInvoiceNumberReuse()
+    {
+        await using var database = CreateDatabase();
+        var customer = new Customer
+        {
+            CustomerCode = "CUS-NO-DELETE",
+            ContactName = "No Delete Customer",
+            Phone = "9876543210",
+        };
+        database.Customers.Add(customer);
+        await database.SaveChangesAsync();
+        var controller = new OrdersController(database);
+        var created = await CreateSimpleOrder(controller, customer.Id, new DateOnly(2026, 8, 27));
+
+        var response = await controller.DeleteOrder(created.Id, CancellationToken.None);
+
+        var conflict = Assert.IsType<ConflictObjectResult>(response);
+        var problem = Assert.IsType<ProblemDetails>(conflict.Value);
+        Assert.Equal(409, problem.Status);
+        Assert.True(await database.SalesOrders.AnyAsync(item => item.Id == created.Id));
+    }
+
+    [Fact]
+    public async Task GetInvoiceData_IncludesTheCurrentCompanyProfile()
+    {
+        await using var database = CreateDatabase();
+        var order = await SeedPaidOrder(database);
+        database.CompanyProfiles.Add(new CompanyProfile
+        {
+            Id = CompanyProfile.DefaultId,
+            CompanyName = "Kanchi Mesh",
+            Address = "No. 10, Industrial Estate\nChennai",
+            BankName = "Example Bank",
+            BankAccountNumber = "1234567890",
+            BankIfscCode = "EXAM0000123",
+        });
+        await database.SaveChangesAsync();
+        var controller = new OrdersController(database);
+
+        var response = await controller.GetInvoiceData(order.Id, CancellationToken.None);
+
+        var ok = Assert.IsType<OkObjectResult>(response.Result);
+        var detail = Assert.IsType<OrderDetailDto>(ok.Value);
+        Assert.NotNull(detail.Company);
+        Assert.Equal("Kanchi Mesh", detail.Company!.CompanyName);
+        Assert.Equal("No. 10, Industrial Estate\nChennai", detail.Company.Address);
+        Assert.Equal("1234567890", detail.Company.BankAccountNumber);
+    }
+
+    private static async Task<OrderDetailDto> CreateSimpleOrder(
+        OrdersController controller,
+        Guid customerId,
+        DateOnly orderDate)
+    {
+        var response = await controller.CreateOrder(
+            new OrderRequest
+            {
+                CustomerId = customerId,
+                OrderDate = orderDate,
+                Status = "Pending",
+                Items =
+                [
+                    new OrderItemRequest
+                    {
+                        Description = "Wire mesh",
+                        Quantity = 1m,
+                        Unit = "pcs",
+                        Rate = 100m,
+                    },
+                ],
+            },
+            CancellationToken.None);
+
+        var created = Assert.IsType<CreatedAtActionResult>(response.Result);
+        return Assert.IsType<OrderDetailDto>(created.Value);
     }
 
     private static KanchimeshDbContext CreateDatabase()

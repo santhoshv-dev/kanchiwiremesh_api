@@ -36,6 +36,30 @@ public sealed class CustomerRequest
     public bool IsActive { get; init; } = true;
 }
 
+public sealed class CompanyProfileRequest
+{
+    [StringLength(180)] public string? CompanyName { get; init; }
+    [StringLength(500)] public string? Address { get; init; }
+    [StringLength(100)] public string? City { get; init; }
+    [StringLength(100)] public string? District { get; init; }
+    [StringLength(100)] public string? State { get; init; }
+    [StringLength(15)] public string? PostalCode { get; init; }
+    [StringLength(25)] public string? Phone { get; init; }
+    [EmailAddress, StringLength(254)] public string? Email { get; init; }
+    [StringLength(32)]
+    [RegularExpression(
+        @"^[0-9]{2}[A-Za-z]{5}[0-9]{4}[A-Za-z][1-9A-Za-z][Zz][0-9A-Za-z]$",
+        ErrorMessage = "GSTIN must be a valid 15-character Indian GST identification number.")]
+    public string? GstNumber { get; init; }
+
+    [StringLength(150)] public string? BankName { get; init; }
+    [StringLength(150)] public string? BankAccountName { get; init; }
+    [StringLength(64)] public string? BankAccountNumber { get; init; }
+    [StringLength(20)] public string? BankIfscCode { get; init; }
+    [StringLength(150)] public string? BankBranch { get; init; }
+    [StringLength(100)] public string? UpiId { get; init; }
+}
+
 public sealed class ProductRequest
 {
     [Required, StringLength(180)] public string Name { get; init; } = string.Empty;

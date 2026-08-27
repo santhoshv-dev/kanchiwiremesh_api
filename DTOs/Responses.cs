@@ -105,6 +105,24 @@ public sealed record PublicEnquiryResponse(
     bool ConfirmationEmailSent,
     string Message);
 
+public sealed record CompanyProfileDto(
+    string? CompanyName,
+    string? Address,
+    string? City,
+    string? District,
+    string? State,
+    string? PostalCode,
+    string? Phone,
+    string? Email,
+    string? GstNumber,
+    string? BankName,
+    string? BankAccountName,
+    string? BankAccountNumber,
+    string? BankIfscCode,
+    string? BankBranch,
+    string? UpiId,
+    DateTime? UpdatedAtUtc);
+
 public sealed record OrderItemDto(
     Guid Id,
     Guid? ProductId,
@@ -152,7 +170,8 @@ public sealed record OrderDetailDto(
     decimal Outstanding,
     IReadOnlyList<OrderItemDto> Items,
     DateTime CreatedAtUtc,
-    DateTime UpdatedAtUtc);
+    DateTime UpdatedAtUtc,
+    CompanyProfileDto? Company = null);
 
 public sealed record PaymentDto(
     Guid Id,
