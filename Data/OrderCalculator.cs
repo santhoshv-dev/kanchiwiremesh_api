@@ -1,4 +1,5 @@
 using KanchimeshAPI.Models;
+using Microsoft.EntityFrameworkCore;
 
 namespace KanchimeshAPI.Data;
 
@@ -25,4 +26,23 @@ public static class OrderCalculator
     }
 
     private static decimal Round(decimal value) => Math.Round(value, 2, MidpointRounding.AwayFromZero);
+
+    public static async Task SyncOrderCompletionAsync(Microsoft.EntityFrameworkCore.DbContext database, SalesOrder order, CancellationToken cancellationToken)
+    {
+        await database.Entry(order).Collection(o => o.Payments).LoadAsync(cancellationToken);
+
+        var paidAmount = order.Payments.Where(p => !p.IsAdvance).Sum(p => p.Amount);
+        
+        bool isFullyPaid = paidAmount >= order.GrandTotal && order.GrandTotal > 0;
+        
+        // Auto-complete if fully paid
+        if (isFullyPaid && order.Status != "Cancelled")
+        {
+            order.Status = "Completed";
+        }
+        else if (!isFullyPaid && order.Status == "Completed")
+        {
+            order.Status = "Pending";
+        }
+    }
 }

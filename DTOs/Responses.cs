@@ -78,24 +78,6 @@ public sealed record InventorySummaryDto(
     bool IsOutOfStock,
     DateTime UpdatedAtUtc);
 
-public sealed record StockMovementDto(
-    Guid Id,
-    Guid ProductId,
-    string ProductCode,
-    string ProductName,
-    string Unit,
-    decimal QuantityChange,
-    decimal BalanceAfter,
-    string MovementType,
-    string? Reason,
-    string? Reference,
-    DateTime OccurredAtUtc,
-    DateTime CreatedAtUtc);
-
-public sealed record StockAdjustmentResultDto(
-    StockMovementDto Movement,
-    ProductDto Product);
-
 public sealed record EnquiryDto(
     Guid Id,
     string EnquiryNumber,

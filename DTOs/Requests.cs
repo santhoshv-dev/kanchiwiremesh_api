@@ -58,16 +58,13 @@ public sealed class ProductRequest
 
 public sealed class StockAdjustmentRequest
 {
-    [Range(typeof(decimal), "-999999999999999", "999999999999999")]
     public decimal QuantityChange { get; init; }
-
-    [Required, StringLength(30)]
-    public string MovementType { get; init; } = StockMovementTypes.Adjustment;
-
-    [StringLength(500)] public string? Reason { get; init; }
-    [StringLength(150)] public string? Reference { get; init; }
+    public string MovementType { get; init; } = string.Empty;
+    public string? Reason { get; init; }
+    public string? Reference { get; init; }
     public DateTime? OccurredAtUtc { get; init; }
 }
+
 
 public sealed class EnquiryRequest
 {
@@ -128,6 +125,7 @@ public sealed class OrderRequest
     [Range(typeof(decimal), "0", "999999999999999")] public decimal DiscountAmount { get; init; }
     [Range(typeof(decimal), "0", "999999999999999")] public decimal FreightAmount { get; init; }
     [StringLength(30)] public string GstType { get; init; } = "IGST";
+    [StringLength(30)] public string? PaymentMethod { get; init; }
     public List<OrderItemRequest> Items { get; set; } = [];
 }
 

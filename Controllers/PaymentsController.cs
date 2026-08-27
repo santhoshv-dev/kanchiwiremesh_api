@@ -3,7 +3,6 @@ using KanchimeshAPI.DTOs;
 using KanchimeshAPI.Models;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Storage;
 using System.Data;
 
 namespace KanchimeshAPI.Controllers;
@@ -92,24 +91,46 @@ public sealed class PaymentsController(KanchimeshDbContext database) : ApiContro
             return ValidationError(nameof(request.Method), $"Method must be one of: {string.Join(", ", WorkflowValues.PaymentMethods)}.");
         }
 
-        await using var transaction = await BeginPaymentTransaction(cancellationToken);
-        var relationError = await ValidateRelations(request, null, cancellationToken);
-        if (relationError is not null)
+        var paymentId = Guid.NewGuid();
+        try
         {
-            return ValidationError(relationError.Value.Field, relationError.Value.Message);
+            if (database.Database.IsRelational())
+            {
+                // SQL Server retries are enabled on the context. An explicit
+                // transaction must be executed through its retry strategy.
+                await ExecutionStrategyExtensions.ExecuteInTransactionAsync<Guid, Guid>(
+                    database.Database.CreateExecutionStrategy(),
+                    paymentId,
+                    async (id, retryCancellationToken) =>
+                    {
+                        database.ChangeTracker.Clear();
+                        await SaveNewPayment(id, request, method, retryCancellationToken);
+                        return id;
+                    },
+                    (id, retryCancellationToken) => database.Payments
+                        .AsNoTracking()
+                        .AnyAsync(payment => payment.Id == id, retryCancellationToken),
+                    (context, retryCancellationToken) => context.Database
+                        .BeginTransactionAsync(IsolationLevel.Serializable, retryCancellationToken),
+                    cancellationToken);
+            }
+            else
+            {
+                await SaveNewPayment(paymentId, request, method, cancellationToken);
+            }
+        }
+        catch (PaymentValidationException exception)
+        {
+            return ValidationError(exception.Field, exception.Message);
         }
 
-        var payment = new Payment { PaymentNumber = DocumentNumbers.New("PAY") };
-        Apply(payment, request, method);
-        database.Payments.Add(payment);
-        await database.SaveChangesAsync(cancellationToken);
-        if (transaction is not null)
+        var savedPayment = await GetPaymentGraph(paymentId, tracking: false, cancellationToken);
+        if (savedPayment is null)
         {
-            await transaction.CommitAsync(cancellationToken);
+            throw new InvalidOperationException("The newly created payment could not be reloaded.");
         }
 
-        var savedPayment = await GetPaymentGraph(payment.Id, tracking: false, cancellationToken);
-        return CreatedAtAction(nameof(GetPayment), new { payment.Id }, savedPayment!.ToDto());
+        return CreatedAtAction(nameof(GetPayment), new { savedPayment.Id }, savedPayment.ToDto());
     }
 
     [HttpPut("{id:guid}")]
@@ -131,28 +152,47 @@ public sealed class PaymentsController(KanchimeshDbContext database) : ApiContro
             return ValidationError(nameof(request.Method), $"Method must be one of: {string.Join(", ", WorkflowValues.PaymentMethods)}.");
         }
 
-        await using var transaction = await BeginPaymentTransaction(cancellationToken);
-        var payment = await GetPaymentGraph(id, tracking: true, cancellationToken);
-        if (payment is null)
+        var updateStartedAtUtc = DateTime.UtcNow;
+        try
+        {
+            if (database.Database.IsRelational())
+            {
+                await ExecutionStrategyExtensions.ExecuteInTransactionAsync<Guid, Guid>(
+                    database.Database.CreateExecutionStrategy(),
+                    id,
+                    async (paymentId, retryCancellationToken) =>
+                    {
+                        database.ChangeTracker.Clear();
+                        await SaveUpdatedPayment(paymentId, request, method, retryCancellationToken);
+                        return paymentId;
+                    },
+                    (paymentId, retryCancellationToken) => PaymentMatchesRequest(
+                        paymentId, request, method, updateStartedAtUtc, retryCancellationToken),
+                    (context, retryCancellationToken) => context.Database
+                        .BeginTransactionAsync(IsolationLevel.Serializable, retryCancellationToken),
+                    cancellationToken);
+            }
+            else
+            {
+                await SaveUpdatedPayment(id, request, method, cancellationToken);
+            }
+        }
+        catch (PaymentNotFoundException)
         {
             return NotFound();
         }
-
-        var relationError = await ValidateRelations(request, id, cancellationToken);
-        if (relationError is not null)
+        catch (PaymentValidationException exception)
         {
-            return ValidationError(relationError.Value.Field, relationError.Value.Message);
+            return ValidationError(exception.Field, exception.Message);
         }
 
-        Apply(payment, request, method);
-        await database.SaveChangesAsync(cancellationToken);
-        if (transaction is not null)
+        var savedPayment = await GetPaymentGraph(id, tracking: false, cancellationToken);
+        if (savedPayment is null)
         {
-            await transaction.CommitAsync(cancellationToken);
+            throw new InvalidOperationException("The updated payment could not be reloaded.");
         }
 
-        var savedPayment = await GetPaymentGraph(payment.Id, tracking: false, cancellationToken);
-        return Ok(savedPayment!.ToDto());
+        return Ok(savedPayment.ToDto());
     }
 
     [HttpDelete("{id:guid}")]
@@ -166,7 +206,18 @@ public sealed class PaymentsController(KanchimeshDbContext database) : ApiContro
             return NotFound();
         }
 
+        var orderId = payment.SalesOrderId;
         database.Payments.Remove(payment);
+        
+        if (orderId.HasValue)
+        {
+            var order = await database.SalesOrders.FindAsync([orderId.Value], cancellationToken);
+            if (order != null)
+            {
+                await OrderCalculator.SyncOrderCompletionAsync(database, order, cancellationToken);
+            }
+        }
+
         await database.SaveChangesAsync(cancellationToken);
         return NoContent();
     }
@@ -326,14 +377,95 @@ public sealed class PaymentsController(KanchimeshDbContext database) : ApiContro
         return await query.SingleOrDefaultAsync(payment => payment.Id == id, cancellationToken);
     }
 
-    private async Task<IDbContextTransaction?> BeginPaymentTransaction(CancellationToken cancellationToken)
+    private async Task SaveNewPayment(
+        Guid paymentId,
+        PaymentRequest request,
+        string method,
+        CancellationToken cancellationToken)
     {
-        if (!database.Database.IsSqlServer())
+        var relationError = await ValidateRelations(request, null, cancellationToken);
+        if (relationError is not null)
         {
-            return null;
+            throw new PaymentValidationException(relationError.Value.Field, relationError.Value.Message);
         }
 
-        return await database.Database.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);
+        var payment = new Payment
+        {
+            Id = paymentId,
+            PaymentNumber = DocumentNumbers.New("PAY"),
+        };
+        Apply(payment, request, method);
+        database.Payments.Add(payment);
+        
+        if (payment.SalesOrderId.HasValue)
+        {
+            var order = await database.SalesOrders.FindAsync([payment.SalesOrderId.Value], cancellationToken);
+            if (order != null)
+            {
+                await OrderCalculator.SyncOrderCompletionAsync(database, order, cancellationToken);
+            }
+        }
+        await database.SaveChangesAsync(cancellationToken);
+    }
+
+    private async Task SaveUpdatedPayment(
+        Guid paymentId,
+        PaymentRequest request,
+        string method,
+        CancellationToken cancellationToken)
+    {
+        var payment = await GetPaymentGraph(paymentId, tracking: true, cancellationToken);
+        if (payment is null)
+        {
+            throw new PaymentNotFoundException();
+        }
+
+        var relationError = await ValidateRelations(request, paymentId, cancellationToken);
+        if (relationError is not null)
+        {
+            throw new PaymentValidationException(relationError.Value.Field, relationError.Value.Message);
+        }
+
+        Apply(payment, request, method);
+
+        if (payment.SalesOrderId.HasValue)
+        {
+            var order = await database.SalesOrders.FindAsync([payment.SalesOrderId.Value], cancellationToken);
+            if (order != null)
+            {
+                await OrderCalculator.SyncOrderCompletionAsync(database, order, cancellationToken);
+            }
+        }
+
+        await database.SaveChangesAsync(cancellationToken);
+    }
+
+    private Task<bool> PaymentMatchesRequest(
+        Guid paymentId,
+        PaymentRequest request,
+        string method,
+        DateTime updateStartedAtUtc,
+        CancellationToken cancellationToken) =>
+        database.Payments.AsNoTracking().AnyAsync(payment =>
+            payment.Id == paymentId &&
+            payment.CustomerId == request.CustomerId &&
+            payment.SalesOrderId == request.SalesOrderId &&
+            payment.Amount == request.Amount &&
+            payment.PaymentDate == request.PaymentDate &&
+            payment.Method == method &&
+            payment.Reference == Null(request.Reference) &&
+            payment.Notes == Null(request.Notes) &&
+            payment.IsAdvance == request.IsAdvance &&
+            payment.UpdatedAtUtc >= updateStartedAtUtc,
+            cancellationToken);
+
+    private sealed class PaymentValidationException(string field, string message) : Exception(message)
+    {
+        public string Field { get; } = field;
+    }
+
+    private sealed class PaymentNotFoundException : Exception
+    {
     }
 
     private static string? Null(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();

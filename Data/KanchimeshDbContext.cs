@@ -8,7 +8,7 @@ public sealed class KanchimeshDbContext(DbContextOptions<KanchimeshDbContext> op
     public DbSet<ApplicationUser> ApplicationUsers => Set<ApplicationUser>();
     public DbSet<Customer> Customers => Set<Customer>();
     public DbSet<Product> Products => Set<Product>();
-    public DbSet<StockMovement> StockMovements => Set<StockMovement>();
+
     public DbSet<Enquiry> Enquiries => Set<Enquiry>();
     public DbSet<EmailDeliveryJob> EmailDeliveryJobs => Set<EmailDeliveryJob>();
     public DbSet<ApplicationNotification> Notifications => Set<ApplicationNotification>();
@@ -23,7 +23,7 @@ public sealed class KanchimeshDbContext(DbContextOptions<KanchimeshDbContext> op
         ConfigureAuditEntity<ApplicationUser>(modelBuilder.Entity<ApplicationUser>());
         ConfigureAuditEntity<Customer>(modelBuilder.Entity<Customer>());
         ConfigureAuditEntity<Product>(modelBuilder.Entity<Product>());
-        ConfigureAuditEntity<StockMovement>(modelBuilder.Entity<StockMovement>());
+
         ConfigureAuditEntity<Enquiry>(modelBuilder.Entity<Enquiry>());
         ConfigureAuditEntity<EmailDeliveryJob>(modelBuilder.Entity<EmailDeliveryJob>());
         ConfigureAuditEntity<ApplicationNotification>(modelBuilder.Entity<ApplicationNotification>());
@@ -84,21 +84,6 @@ public sealed class KanchimeshDbContext(DbContextOptions<KanchimeshDbContext> op
             entity.Property(x => x.ReorderLevel).HasPrecision(18, 3).HasDefaultValue(0m);
         });
 
-        modelBuilder.Entity<StockMovement>(entity =>
-        {
-            entity.HasIndex(x => new { x.ProductId, x.OccurredAtUtc, x.Id });
-            entity.HasIndex(x => new { x.MovementType, x.OccurredAtUtc });
-            entity.Property(x => x.QuantityChange).HasPrecision(18, 3);
-            entity.Property(x => x.BalanceAfter).HasPrecision(18, 3);
-            entity.Property(x => x.MovementType).HasMaxLength(30).IsRequired();
-            entity.Property(x => x.Reason).HasMaxLength(500);
-            entity.Property(x => x.Reference).HasMaxLength(150);
-            entity.Property(x => x.OccurredAtUtc).HasColumnType("datetime2");
-            entity.HasOne(x => x.Product)
-                .WithMany(x => x.StockMovements)
-                .HasForeignKey(x => x.ProductId)
-                .OnDelete(DeleteBehavior.Restrict);
-        });
 
         modelBuilder.Entity<Enquiry>(entity =>
         {
@@ -220,16 +205,109 @@ public sealed class KanchimeshDbContext(DbContextOptions<KanchimeshDbContext> op
         });
     }
 
-    public override Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
+    public override async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
     {
+        await ProcessStockChanges(cancellationToken);
         StampAuditFields();
-        return base.SaveChangesAsync(cancellationToken);
+        return await base.SaveChangesAsync(cancellationToken);
     }
 
     public override int SaveChanges()
     {
         StampAuditFields();
         return base.SaveChanges();
+    }
+
+    private async Task ProcessStockChanges(CancellationToken cancellationToken)
+    {
+        var orderEntries = ChangeTracker.Entries<SalesOrder>()
+            .Where(e => e.State == EntityState.Modified)
+            .ToList();
+
+        foreach (var entry in orderEntries)
+        {
+            string oldStatus = (string)entry.OriginalValues["Status"]!;
+            string newStatus = (string)entry.CurrentValues["Status"]!;
+
+            if (oldStatus != "Cancelled" && newStatus == "Cancelled")
+            {
+                var orderId = entry.Entity.Id;
+                var items = await SalesOrderItems.Where(i => i.SalesOrderId == orderId).Include(i => i.Product).ToListAsync(cancellationToken);
+                foreach (var item in items)
+                {
+                    if (item.Product != null)
+                    {
+                        item.Product.QuantityOnHand += item.Quantity;
+                        item.Product.TotalSold -= item.Quantity;
+                    }
+                }
+            }
+            else if (oldStatus == "Cancelled" && newStatus != "Cancelled")
+            {
+                var orderId = entry.Entity.Id;
+                var items = await SalesOrderItems.Where(i => i.SalesOrderId == orderId).Include(i => i.Product).ToListAsync(cancellationToken);
+                foreach (var item in items)
+                {
+                    if (item.Product != null)
+                    {
+                        item.Product.QuantityOnHand -= item.Quantity;
+                        item.Product.TotalSold += item.Quantity;
+                    }
+                }
+            }
+        }
+
+        var itemEntries = ChangeTracker.Entries<SalesOrderItem>()
+            .Where(e => e.State == EntityState.Added || e.State == EntityState.Deleted)
+            .ToList();
+
+        foreach (var entry in itemEntries)
+        {
+            var item = entry.Entity;
+            var productId = entry.State == EntityState.Deleted ? (Guid)entry.OriginalValues["ProductId"]! : item.ProductId;
+            var quantity = entry.State == EntityState.Deleted ? (decimal)entry.OriginalValues["Quantity"]! : item.Quantity;
+            
+            var orderId = entry.State == EntityState.Deleted ? (Guid)entry.OriginalValues["SalesOrderId"]! : item.SalesOrderId;
+            
+            var orderEntry = ChangeTracker.Entries<SalesOrder>().FirstOrDefault(e => e.Entity.Id == orderId);
+            string orderStatus = "Pending";
+            
+            if (orderEntry != null)
+            {
+                orderStatus = orderEntry.State == EntityState.Deleted ? "Deleted" : (string)orderEntry.CurrentValues["Status"]!;
+                if (orderEntry.State == EntityState.Modified)
+                {
+                    string oldStatus = (string)orderEntry.OriginalValues["Status"]!;
+                    string newStatus = (string)orderEntry.CurrentValues["Status"]!;
+                    if (oldStatus != newStatus && (oldStatus == "Cancelled" || newStatus == "Cancelled"))
+                    {
+                        continue;
+                    }
+                }
+            }
+            else
+            {
+                var order = await SalesOrders.AsNoTracking().FirstOrDefaultAsync(o => o.Id == orderId, cancellationToken);
+                if (order != null) orderStatus = order.Status;
+            }
+
+            if (orderStatus == "Cancelled" || orderStatus == "Deleted") continue;
+
+            var product = await Products.FindAsync(new object[] { productId }, cancellationToken);
+            if (product != null)
+            {
+                if (entry.State == EntityState.Added)
+                {
+                    product.QuantityOnHand -= quantity;
+                    product.TotalSold += quantity;
+                }
+                else if (entry.State == EntityState.Deleted)
+                {
+                    product.QuantityOnHand += quantity;
+                    product.TotalSold -= quantity;
+                }
+            }
+        }
     }
 
     private void StampAuditFields()

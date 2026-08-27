@@ -76,6 +76,7 @@ public sealed class OrdersController(KanchimeshDbContext database) : ApiControll
 
     [HttpPost]
     [ProducesResponseType(typeof(OrderDetailDto), StatusCodes.Status201Created)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
     public async Task<ActionResult<OrderDetailDto>> CreateOrder(OrderRequest request, CancellationToken cancellationToken)
     {
         var compatibilityError = await ResolveCompatibilityFields(request, cancellationToken);
@@ -95,33 +96,46 @@ public sealed class OrdersController(KanchimeshDbContext database) : ApiControll
             return ValidationError(relationError.Value.Field, relationError.Value.Message);
         }
 
-        var orderId = Guid.NewGuid();
-        if (database.Database.IsRelational())
+        var totalError = ValidateTotals(request);
+        if (totalError is not null)
         {
-            // SQL Server retry support is configured on the context. Keep the
-            // whole serializable allocation transaction inside its execution
-            // strategy and verify a possibly successful commit before retrying.
-            await ExecutionStrategyExtensions.ExecuteInTransactionAsync<Guid, Guid>(
-                database.Database.CreateExecutionStrategy(),
-                orderId,
-                async (id, retryCancellationToken) =>
-                {
-                    // A retry reuses this DbContext, so discard entities left
-                    // over from an interrupted attempt before trying again.
-                    database.ChangeTracker.Clear();
-                    await SaveNewOrder(id, request, status, retryCancellationToken);
-                    return id;
-                },
-                (id, retryCancellationToken) => database.SalesOrders
-                    .AsNoTracking()
-                    .AnyAsync(order => order.Id == id, retryCancellationToken),
-                (context, retryCancellationToken) => context.Database
-                    .BeginTransactionAsync(IsolationLevel.Serializable, retryCancellationToken),
-                cancellationToken);
+            return ValidationError(totalError.Value.Field, totalError.Value.Message);
         }
-        else
+
+        var orderId = Guid.NewGuid();
+        try
         {
-            await SaveNewOrder(orderId, request, status, cancellationToken);
+            if (database.Database.IsRelational())
+            {
+                // SQL Server retry support is configured on the context. Keep the
+                // whole serializable allocation transaction inside its execution
+                // strategy and verify a possibly successful commit before retrying.
+                await ExecutionStrategyExtensions.ExecuteInTransactionAsync<Guid, Guid>(
+                    database.Database.CreateExecutionStrategy(),
+                    orderId,
+                    async (id, retryCancellationToken) =>
+                    {
+                        // A retry reuses this DbContext, so discard entities left
+                        // over from an interrupted attempt before trying again.
+                        database.ChangeTracker.Clear();
+                        await SaveNewOrder(id, request, status, retryCancellationToken);
+                        return id;
+                    },
+                    (id, retryCancellationToken) => database.SalesOrders
+                        .AsNoTracking()
+                        .AnyAsync(order => order.Id == id, retryCancellationToken),
+                    (context, retryCancellationToken) => context.Database
+                        .BeginTransactionAsync(IsolationLevel.Serializable, retryCancellationToken),
+                    cancellationToken);
+            }
+            else
+            {
+                await SaveNewOrder(orderId, request, status, cancellationToken);
+            }
+        }
+        catch (OrderNumberExhaustedException)
+        {
+            return OrderNumberExhaustedConflict();
         }
 
         var order = await GetOrderGraph(orderId, tracking: false, cancellationToken);
@@ -158,6 +172,12 @@ public sealed class OrdersController(KanchimeshDbContext database) : ApiControll
             return ValidationError(relationError.Value.Field, relationError.Value.Message);
         }
 
+        var totalError = ValidateTotals(request);
+        if (totalError is not null)
+        {
+            return ValidationError(totalError.Value.Field, totalError.Value.Message);
+        }
+
         var order = await GetOrderGraph(id, tracking: true, cancellationToken);
         if (order is null)
         {
@@ -181,6 +201,7 @@ public sealed class OrdersController(KanchimeshDbContext database) : ApiControll
             return ValidationError(nameof(request.Items), "The updated total cannot be less than payments already applied to this order.");
         }
 
+        await OrderCalculator.SyncOrderCompletionAsync(database, order, cancellationToken);
         await database.SaveChangesAsync(cancellationToken);
         await database.Entry(order).Reference(item => item.Customer).LoadAsync(cancellationToken);
         return Ok(ToDetailDto(order));
@@ -339,6 +360,69 @@ public sealed class OrdersController(KanchimeshDbContext database) : ApiControll
         return null;
     }
 
+    private static (string Field, string Message)? ValidateTotals(OrderRequest request)
+    {
+        // SalesOrder.Subtotal uses decimal(18,3), and values are rounded to
+        // cents by OrderCalculator. Bound the subtotal before multiplying so a
+        // model-valid quantity/rate pair cannot overflow System.Decimal.
+        const decimal maximumSubtotal = 999_999_999_999_999.99m;
+        var subtotal = 0m;
+        foreach (var item in request.Items)
+        {
+            if (item.Rate >= 1m && item.Quantity > maximumSubtotal / item.Rate)
+            {
+                return (nameof(request.Items), "An order item's quantity and rate produce a subtotal that is too large.");
+            }
+
+            // For rates below one, Quantity is already limited to less than
+            // maximumSubtotal, so this multiplication is also safe.
+            var lineSubtotal = Math.Round(
+                item.Quantity * item.Rate,
+                2,
+                MidpointRounding.AwayFromZero);
+            if (lineSubtotal > maximumSubtotal - subtotal)
+            {
+                return (nameof(request.Items), "The order subtotal is too large.");
+            }
+
+            subtotal += lineSubtotal;
+        }
+
+        try
+        {
+            var calculatedOrder = new SalesOrder
+            {
+                DiscountAmount = request.DiscountAmount,
+                FreightAmount = request.FreightAmount,
+                Items = request.Items.Select(item => new SalesOrderItem
+                {
+                    Quantity = item.Quantity,
+                    Rate = item.Rate,
+                    IgstRate = item.IgstRate,
+                    SgstRate = item.SgstRate,
+                    CgstRate = item.CgstRate,
+                }).ToList(),
+            };
+            OrderCalculator.Recalculate(calculatedOrder);
+            const decimal maximumAmount = 9_999_999_999_999_999.99m;
+            if (calculatedOrder.Items.Any(item =>
+                    item.LineSubtotal > maximumAmount ||
+                    item.TaxAmount > maximumAmount ||
+                    item.LineTotal > maximumAmount) ||
+                calculatedOrder.TaxAmount > maximumAmount ||
+                calculatedOrder.GrandTotal > maximumAmount)
+            {
+                return (nameof(request.Items), "The calculated order total is too large.");
+            }
+        }
+        catch (OverflowException)
+        {
+            return (nameof(request.Items), "The calculated order total is too large.");
+        }
+
+        return null;
+    }
+
     private void ReplaceOrderValues(SalesOrder order, OrderRequest request, string status)
     {
         database.SalesOrderItems.RemoveRange(order.Items);
@@ -384,6 +468,24 @@ public sealed class OrdersController(KanchimeshDbContext database) : ApiControll
         };
         ReplaceOrderValues(order, request, status);
         database.SalesOrders.Add(order);
+        
+        if (request.PaidAmount > 0)
+        {
+            var payment = new Payment
+            {
+                Id = Guid.NewGuid(),
+                PaymentNumber = DocumentNumbers.New("PAY"),
+                CustomerId = request.CustomerId,
+                SalesOrder = order,
+                Amount = request.PaidAmount.Value,
+                PaymentDate = request.OrderDate,
+                Method = string.IsNullOrWhiteSpace(request.PaymentMethod) ? "UPI" : request.PaymentMethod,
+                IsAdvance = false
+            };
+            database.Payments.Add(payment);
+        }
+
+        await OrderCalculator.SyncOrderCompletionAsync(database, order, cancellationToken);
         await database.SaveChangesAsync(cancellationToken);
     }
 
@@ -411,8 +513,24 @@ public sealed class OrdersController(KanchimeshDbContext database) : ApiControll
             .Select(number => int.TryParse(number, out var parsed) ? parsed : 0)
             .DefaultIfEmpty(0)
             .Max();
-        return checked(maxNumber + 1).ToString();
+        if (maxNumber == int.MaxValue)
+        {
+            throw new OrderNumberExhaustedException();
+        }
+
+        return (maxNumber + 1).ToString();
     }
+
+    private sealed class OrderNumberExhaustedException : Exception
+    {
+    }
+
+    private ConflictObjectResult OrderNumberExhaustedConflict() => Conflict(new ProblemDetails
+    {
+        Status = StatusCodes.Status409Conflict,
+        Title = "No additional numeric order numbers are available.",
+        Detail = "Contact support to configure a new order-number sequence.",
+    });
 
     private ConflictObjectResult PaidOrderCancellationConflict() => Conflict(new ProblemDetails
     {

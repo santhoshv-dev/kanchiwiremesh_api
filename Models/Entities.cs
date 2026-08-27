@@ -64,14 +64,7 @@ public sealed class Product : AuditableEntity
     public string Unit { get; set; } = "pcs";
     public decimal Rate { get; set; }
     public decimal IgstRate { get; set; } = 18m; public decimal SgstRate { get; set; } = 9m; public decimal CgstRate { get; set; } = 9m;
-    /// <summary>
-    /// Current physical quantity available for sale. Changes are recorded in
-    /// <see cref="StockMovements"/> so the on-hand value can be audited.
-    /// </summary>
     public decimal QuantityOnHand { get; set; }
-    /// <summary>
-    /// The minimum quantity at which the item is highlighted for replenishment.
-    /// </summary>
     public decimal ReorderLevel { get; set; }
     public string? Description { get; set; }
     public decimal TotalStockAdded { get; set; }
@@ -79,38 +72,6 @@ public sealed class Product : AuditableEntity
     public bool IsActive { get; set; } = true;
 
     public ICollection<SalesOrderItem> OrderItems { get; set; } = new List<SalesOrderItem>();
-    public ICollection<StockMovement> StockMovements { get; set; } = new List<StockMovement>();
-}
-
-/// <summary>
-/// Immutable inventory ledger entry. The running balance is stored with each
-/// entry to make stock investigations and exports deterministic.
-/// </summary>
-public sealed class StockMovement : AuditableEntity
-{
-    public Guid ProductId { get; set; }
-    public Product Product { get; set; } = null!;
-    public decimal QuantityChange { get; set; }
-    public decimal BalanceAfter { get; set; }
-    public string MovementType { get; set; } = StockMovementTypes.Adjustment;
-    public string? Reason { get; set; }
-    public string? Reference { get; set; }
-    public DateTime OccurredAtUtc { get; set; } = DateTime.UtcNow;
-}
-
-public static class StockMovementTypes
-{
-    public const string OpeningBalance = "OpeningBalance";
-    public const string StockIn = "StockIn";
-    public const string StockOut = "StockOut";
-    public const string Adjustment = "Adjustment";
-
-    public static readonly IReadOnlyList<string> All =
-    [
-        StockIn,
-        StockOut,
-        Adjustment,
-    ];
 }
 
 public sealed class Enquiry : AuditableEntity
@@ -174,7 +135,7 @@ public sealed class SalesOrder : AuditableEntity
     public Customer Customer { get; set; } = null!;
     public DateOnly OrderDate { get; set; } = DateOnly.FromDateTime(DateTime.UtcNow);
     public DateOnly? ExpectedDeliveryDate { get; set; }
-    public string Status { get; set; } = "New";
+    public string Status { get; set; } = "Pending";
     public string? Notes { get; set; }
     public decimal Subtotal { get; set; }
     public decimal DiscountAmount { get; set; }

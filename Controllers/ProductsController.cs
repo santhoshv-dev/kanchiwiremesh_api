@@ -74,16 +74,6 @@ public sealed class ProductsController(KanchimeshDbContext database) : ApiContro
         };
         Apply(product, request);
         database.Products.Add(product);
-        if (initialStock > 0m)
-        {
-            product.StockMovements.Add(new StockMovement
-            {
-                QuantityChange = initialStock,
-                BalanceAfter = initialStock,
-                MovementType = StockMovementTypes.OpeningBalance,
-                Reason = "Opening stock recorded when the product was created.",
-            });
-        }
 
         await database.SaveChangesAsync(cancellationToken);
         return CreatedAtAction(nameof(GetProduct), new { product.Id }, product.ToDto());
@@ -94,18 +84,40 @@ public sealed class ProductsController(KanchimeshDbContext database) : ApiContro
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<ActionResult<ProductDto>> UpdateProduct(Guid id, ProductRequest request, CancellationToken cancellationToken)
     {
-        if (request.InitialStock.HasValue)
-        {
-            return ValidationError(nameof(request.InitialStock), "Initial stock can only be set while creating a product. Use a stock adjustment to change current stock.");
-        }
-
         var product = await database.Products.SingleOrDefaultAsync(item => item.Id == id, cancellationToken);
         if (product is null)
         {
             return NotFound();
         }
 
+        if (request.InitialStock.HasValue)
+        {
+            product.QuantityOnHand = request.InitialStock.Value;
+        }
+
         Apply(product, request);
+        await database.SaveChangesAsync(cancellationToken);
+        return Ok(product.ToDto());
+    }
+
+    [HttpPost("{id:guid}/adjustments")]
+    [ProducesResponseType(typeof(ProductDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<ProductDto>> AdjustStock(Guid id, [FromBody] StockAdjustmentRequest request, CancellationToken cancellationToken)
+    {
+        var product = await database.Products.SingleOrDefaultAsync(item => item.Id == id, cancellationToken);
+        if (product is null)
+        {
+            return NotFound();
+        }
+
+        product.QuantityOnHand += request.QuantityChange;
+        
+        if (request.QuantityChange > 0)
+        {
+            product.TotalStockAdded += request.QuantityChange;
+        }
+
         await database.SaveChangesAsync(cancellationToken);
         return Ok(product.ToDto());
     }
