@@ -82,6 +82,7 @@ public sealed class Product : AuditableEntity
 {
     public string ProductCode { get; set; } = string.Empty;
     public string Name { get; set; } = string.Empty;
+    public string HsnSac { get; set; } = string.Empty;
     public string Category { get; set; } = string.Empty;
     public string? MeshType { get; set; }
     public string? MeshOpening { get; set; }
@@ -183,6 +184,7 @@ public sealed class SalesOrderItem
     public Guid? ProductId { get; set; }
     public Product? Product { get; set; }
     public string Description { get; set; } = string.Empty;
+    public string? HsnSac { get; set; }
     public string? Specification { get; set; }
     public decimal Quantity { get; set; }
     public string Unit { get; set; } = "pcs";

@@ -142,6 +142,7 @@ public sealed class ProductsController(KanchimeshDbContext database) : ApiContro
     private static void Apply(Product product, ProductRequest request)
     {
         product.Name = request.Name.Trim();
+        product.HsnSac = request.HsnSac.Trim();
         product.Category = request.Category.Trim();
         product.MeshType = Null(request.MeshType);
         product.MeshOpening = Null(request.MeshOpening);

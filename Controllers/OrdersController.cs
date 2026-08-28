@@ -367,6 +367,7 @@ public sealed class OrdersController(KanchimeshDbContext database) : ApiControll
                 {
                     ProductId = productId,
                     Description = productName,
+                    HsnSac = null,
                     Quantity = 1m,
                     Unit = "pcs",
                     Rate = request.Amount.Value,
@@ -452,6 +453,7 @@ public sealed class OrdersController(KanchimeshDbContext database) : ApiControll
                 SalesOrderId = order.Id,
                 ProductId = item.ProductId,
                 Description = item.Description.Trim(),
+                HsnSac = Null(item.HsnSac),
                 Specification = Null(item.Specification),
                 Quantity = item.Quantity,
                 Unit = item.Unit.Trim(),

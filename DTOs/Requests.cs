@@ -63,6 +63,7 @@ public sealed class CompanyProfileRequest
 public sealed class ProductRequest
 {
     [Required, StringLength(180)] public string Name { get; init; } = string.Empty;
+    [Required, StringLength(50)] public string HsnSac { get; init; } = string.Empty;
     [Required, StringLength(100)] public string Category { get; init; } = string.Empty;
     [StringLength(100)] public string? MeshType { get; init; }
     [StringLength(100)] public string? MeshOpening { get; init; }
@@ -126,6 +127,7 @@ public sealed class OrderItemRequest
 {
     public Guid? ProductId { get; init; }
     [Required, StringLength(300)] public string Description { get; init; } = string.Empty;
+    [StringLength(50)] public string? HsnSac { get; init; }
     [StringLength(1000)] public string? Specification { get; init; }
     [Range(typeof(decimal), "0.001", "999999999999999")] public decimal Quantity { get; init; }
     [Required, StringLength(30)] public string Unit { get; init; } = "pcs";
