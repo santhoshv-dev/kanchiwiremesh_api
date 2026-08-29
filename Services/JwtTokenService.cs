@@ -44,9 +44,9 @@ public sealed class JwtOptions
                 "Authentication:Jwt:SigningKey must be configured from a secret store and contain at least 32 bytes.");
         }
 
-        if (options.AccessTokenLifetimeMinutes is < 5 or > 1440)
+        if (options.AccessTokenLifetimeMinutes is < 5 or > 43200)
         {
-            throw new InvalidOperationException("Authentication:Jwt:AccessTokenLifetimeMinutes must be between 5 and 1440.");
+            throw new InvalidOperationException("Authentication:Jwt:AccessTokenLifetimeMinutes must be between 5 and 43200.");
         }
 
         return options;

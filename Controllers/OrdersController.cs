@@ -489,10 +489,14 @@ public sealed class OrdersController(KanchimeshDbContext database) : ApiControll
         var existingOrderNumbers = await database.SalesOrders.AsNoTracking()
             .Select(order => order.OrderNumber)
             .ToListAsync(cancellationToken);
+        
+        var isNonGst = request.GstType == "None" || request.Items.All(i => i.IgstRate == 0 && i.CgstRate == 0 && i.SgstRate == 0);
+        var orderNumber = isNonGst ? $"ORD-{orderId.ToString()[..8].ToUpperInvariant()}" : GetNextOrderNumber(request.OrderDate, existingOrderNumbers);
+
         var order = new SalesOrder
         {
             Id = orderId,
-            OrderNumber = GetNextOrderNumber(request.OrderDate, existingOrderNumbers),
+            OrderNumber = orderNumber,
         };
         // Track the parent before adding line items. That gives EF a principal
         // for relationship fix-up and ensures each new item is tracked as an
