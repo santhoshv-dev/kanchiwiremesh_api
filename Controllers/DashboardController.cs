@@ -52,9 +52,12 @@ public sealed class DashboardController(KanchimeshDbContext database) : ApiContr
             .ThenByDescending(order => order.CreatedAtUtc)
             .Take(5)
             .ToListAsync(cancellationToken);
-        var totalSales = await database.SalesOrders
+        var totalOpeningBalances = await database.Customers
+            .Where(customer => customer.IsActive)
+            .SumAsync(customer => (decimal?)customer.OpeningBalance, cancellationToken) ?? 0m;
+        var totalSales = (await database.SalesOrders
             .Where(order => order.Status != "Cancelled")
-            .SumAsync(order => (decimal?)order.GrandTotal, cancellationToken) ?? 0m;
+            .SumAsync(order => (decimal?)order.GrandTotal, cancellationToken) ?? 0m) + totalOpeningBalances;
         var totalReceived = await database.Payments
             .Where(payment => payment.SalesOrderId == null || payment.SalesOrder!.Status != "Cancelled")
             .SumAsync(payment => (decimal?)payment.Amount, cancellationToken) ?? 0m;
@@ -77,7 +80,7 @@ public sealed class DashboardController(KanchimeshDbContext database) : ApiContr
             totalSales,
             totalReceived,
             totalReceived,
-            Math.Max(totalSales - appliedToOrders, 0m),
+            Math.Max(totalSales - totalReceived, 0m),
             advanceBalance,
             recentOrders.Select(ToSummaryDto).ToList(),
             salesBars));
