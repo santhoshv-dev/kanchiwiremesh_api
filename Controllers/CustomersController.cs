@@ -136,6 +136,11 @@ public sealed class CustomersController(KanchimeshDbContext database) : ApiContr
         }
 
         var entries = new List<(DateOnly Date, int SortOrder, string Type, string Description, decimal Debit, decimal Credit, Guid Id)>();
+        if (customer.OpeningBalance > 0)
+        {
+            var createdDate = DateOnly.FromDateTime(customer.CreatedAtUtc);
+            entries.Add((createdDate, -1, "Opening Balance", "Opening Due Balance", customer.OpeningBalance, 0m, Guid.Empty));
+        }
         entries.AddRange(customer.Orders
             .Where(order => !string.Equals(order.Status, "Cancelled", StringComparison.OrdinalIgnoreCase))
             .Select(order => (order.OrderDate, 0, "Order", $"Order #{order.OrderNumber}", order.GrandTotal, 0m, order.Id)));
@@ -157,7 +162,7 @@ public sealed class CustomersController(KanchimeshDbContext database) : ApiContr
             })
             .ToList();
 
-        var totalSales = customer.Orders
+        var totalSales = customer.OpeningBalance + customer.Orders
             .Where(order => !string.Equals(order.Status, "Cancelled", StringComparison.OrdinalIgnoreCase))
             .Sum(order => order.GrandTotal);
         var totalPaid = ValidPayments(customer).Sum(payment => payment.Amount);
@@ -173,7 +178,7 @@ public sealed class CustomersController(KanchimeshDbContext database) : ApiContr
     private static CustomerListItemDto ToListDto(Customer customer)
     {
         var orders = customer.Orders.Where(order => !string.Equals(order.Status, "Cancelled", StringComparison.OrdinalIgnoreCase)).ToList();
-        var totalSales = orders.Sum(order => order.GrandTotal);
+        var totalSales = orders.Sum(order => order.GrandTotal) + customer.OpeningBalance;
         var totalPaid = ValidPayments(customer).Sum(payment => payment.Amount);
         return new CustomerListItemDto(
             customer.Id,
@@ -186,7 +191,8 @@ public sealed class CustomersController(KanchimeshDbContext database) : ApiContr
             orders.Count,
             totalSales,
             totalPaid,
-            Math.Max(totalSales - totalPaid, 0m));
+            Math.Max(totalSales - totalPaid, 0m),
+            customer.OpeningBalance);
     }
 
     private static CustomerDetailDto ToDetailDto(Customer customer)
@@ -215,7 +221,8 @@ public sealed class CustomersController(KanchimeshDbContext database) : ApiContr
             list.TotalPaid,
             list.Outstanding,
             customer.CreatedAtUtc,
-            customer.UpdatedAtUtc);
+            customer.UpdatedAtUtc,
+            customer.OpeningBalance);
     }
 
     private static void Apply(Customer customer, CustomerRequest request)
@@ -234,6 +241,7 @@ public sealed class CustomersController(KanchimeshDbContext database) : ApiContr
         customer.GstNumber = Null(request.GstNumber)?.ToUpperInvariant();
         customer.BusinessType = Null(request.BusinessType);
         customer.Notes = Null(request.Notes);
+        customer.OpeningBalance = request.OpeningBalance;
         customer.IsActive = request.IsActive;
     }
 

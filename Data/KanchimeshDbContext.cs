@@ -16,6 +16,8 @@ public sealed class KanchimeshDbContext(DbContextOptions<KanchimeshDbContext> op
     public DbSet<SalesOrder> SalesOrders => Set<SalesOrder>();
     public DbSet<SalesOrderItem> SalesOrderItems => Set<SalesOrderItem>();
     public DbSet<Payment> Payments => Set<Payment>();
+    public DbSet<ProductTransaction> ProductTransactions => Set<ProductTransaction>();
+    public DbSet<PurchaseRecord> PurchaseRecords => Set<PurchaseRecord>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -31,6 +33,8 @@ public sealed class KanchimeshDbContext(DbContextOptions<KanchimeshDbContext> op
         ConfigureAuditEntity<ApplicationNotification>(modelBuilder.Entity<ApplicationNotification>());
         ConfigureAuditEntity<SalesOrder>(modelBuilder.Entity<SalesOrder>());
         ConfigureAuditEntity<Payment>(modelBuilder.Entity<Payment>());
+        ConfigureAuditEntity<ProductTransaction>(modelBuilder.Entity<ProductTransaction>());
+        ConfigureAuditEntity<PurchaseRecord>(modelBuilder.Entity<PurchaseRecord>());
 
         modelBuilder.Entity<ApplicationUser>(entity =>
         {
@@ -82,6 +86,7 @@ public sealed class KanchimeshDbContext(DbContextOptions<KanchimeshDbContext> op
             entity.Property(x => x.GstNumber).HasMaxLength(32);
             entity.Property(x => x.BusinessType).HasMaxLength(100);
             entity.Property(x => x.Notes).HasMaxLength(2000);
+            entity.Property(x => x.OpeningBalance).HasPrecision(18, 2).HasDefaultValue(0m);
         });
 
         modelBuilder.Entity<Product>(entity =>
@@ -104,7 +109,6 @@ public sealed class KanchimeshDbContext(DbContextOptions<KanchimeshDbContext> op
             entity.Property(x => x.TotalSold).HasPrecision(18, 3).HasDefaultValue(0m);
             entity.Property(x => x.ReorderLevel).HasPrecision(18, 3).HasDefaultValue(0m);
         });
-
 
         modelBuilder.Entity<Enquiry>(entity =>
         {
@@ -224,6 +228,45 @@ public sealed class KanchimeshDbContext(DbContextOptions<KanchimeshDbContext> op
                 .HasForeignKey(x => x.SalesOrderId)
                 .OnDelete(DeleteBehavior.SetNull);
         });
+
+        modelBuilder.Entity<ProductTransaction>(entity =>
+        {
+            entity.HasIndex(x => x.TransactionNumber).IsUnique();
+            entity.Property(x => x.TransactionNumber).HasMaxLength(48).IsRequired();
+            entity.Property(x => x.TransactionType).HasMaxLength(30).IsRequired();
+            entity.Property(x => x.PartyName).HasMaxLength(150);
+            entity.Property(x => x.PartyMobile).HasMaxLength(25);
+            entity.Property(x => x.PartyLocation).HasMaxLength(200);
+            entity.Property(x => x.Notes).HasMaxLength(2000);
+            entity.Property(x => x.Quantity).HasPrecision(18, 3);
+            entity.Property(x => x.Amount).HasPrecision(18, 2);
+            entity.Property(x => x.PaymentStatus).HasMaxLength(30).IsRequired();
+            entity.HasOne(x => x.Product)
+                .WithMany(x => x.ProductTransactions)
+                .HasForeignKey(x => x.ProductId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<PurchaseRecord>(entity =>
+        {
+            entity.HasIndex(x => x.PurchaseNumber).IsUnique();
+            entity.HasIndex(x => x.PurchaseDate);
+            entity.Property(x => x.PurchaseNumber).HasMaxLength(48).IsRequired();
+            entity.Property(x => x.ProductName).HasMaxLength(300).IsRequired();
+            entity.Property(x => x.ProductCode).HasMaxLength(50);
+            entity.Property(x => x.BuyerName).HasMaxLength(180);
+            entity.Property(x => x.BuyerContactNumber).HasMaxLength(25);
+            entity.Property(x => x.BuyerGstNumber).HasMaxLength(32);
+            entity.Property(x => x.BuyerLocation).HasMaxLength(500);
+            entity.Property(x => x.SupplierName).HasMaxLength(180);
+            entity.Property(x => x.PurchaseDate).HasColumnType("date");
+            entity.Property(x => x.QuantityPurchased).HasPrecision(18, 3);
+            entity.Property(x => x.PurchaseAmount).HasPrecision(18, 2);
+            entity.Property(x => x.GstAmount).HasPrecision(18, 2);
+            entity.Property(x => x.GstRate).HasPrecision(5, 2);
+            entity.Property(x => x.PaymentStatus).HasMaxLength(30).IsRequired();
+            entity.Property(x => x.Notes).HasMaxLength(2000);
+        });
     }
 
     public override async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
@@ -306,12 +349,12 @@ public sealed class KanchimeshDbContext(DbContextOptions<KanchimeshDbContext> op
                 ? entry.OriginalValues["ProductId"] is Guid originalProductId ? originalProductId : null
                 : item.ProductId;
             var quantity = entry.State == EntityState.Deleted ? (decimal)entry.OriginalValues["Quantity"]! : item.Quantity;
-            
+
             var orderId = entry.State == EntityState.Deleted ? (Guid)entry.OriginalValues["SalesOrderId"]! : item.SalesOrderId;
-            
+
             var orderEntry = ChangeTracker.Entries<SalesOrder>().FirstOrDefault(e => e.Entity.Id == orderId);
             string orderStatus = "Pending";
-            
+
             if (orderEntry != null)
             {
                 orderStatus = orderEntry.State == EntityState.Deleted ? "Deleted" : (string)orderEntry.CurrentValues["Status"]!;

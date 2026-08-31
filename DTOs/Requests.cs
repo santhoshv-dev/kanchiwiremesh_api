@@ -33,6 +33,7 @@ public sealed class CustomerRequest
     public string? GstNumber { get; init; }
     [StringLength(100)] public string? BusinessType { get; init; }
     [StringLength(2000)] public string? Notes { get; init; }
+    public decimal OpeningBalance { get; init; }
     public bool IsActive { get; init; } = true;
 }
 
@@ -191,4 +192,36 @@ public sealed class ChangePasswordRequest
 public sealed class ForgotPasswordRequest
 {
     [Required, EmailAddress, StringLength(254)] public string Email { get; init; } = string.Empty;
+}
+
+
+public sealed class ProductTransactionRequest
+{
+    [Required] public string TransactionType { get; init; } = "Sale";
+    [StringLength(150)] public string? PartyName { get; init; }
+    [StringLength(25)] public string? PartyMobile { get; init; }
+    [StringLength(200)] public string? PartyLocation { get; init; }
+    public DateOnly TransactionDate { get; init; } = DateOnly.FromDateTime(DateTime.UtcNow);
+    [Range(typeof(decimal), "0.001", "999999999999")] public decimal Quantity { get; init; }
+    [Range(typeof(decimal), "0", "999999999999")] public decimal Amount { get; init; }
+    [StringLength(30)] public string? PaymentStatus { get; init; } = "Paid";
+    [StringLength(2000)] public string? Notes { get; init; }
+}
+
+public sealed class PurchaseRecordRequest
+{
+    [Required, StringLength(300)] public string ProductName { get; init; } = string.Empty;
+    [StringLength(50)] public string? ProductCode { get; init; }
+    [StringLength(180)] public string? BuyerName { get; init; }
+    [StringLength(25)] public string? BuyerContactNumber { get; init; }
+    [StringLength(32)] public string? BuyerGstNumber { get; init; }
+    [StringLength(500)] public string? BuyerLocation { get; init; }
+    [StringLength(180)] public string? SupplierName { get; init; }
+    public DateOnly? PurchaseDate { get; init; }
+    public decimal? QuantityPurchased { get; init; }
+    public decimal? PurchaseAmount { get; init; }
+    public decimal? GstAmount { get; init; }
+    public decimal? GstRate { get; init; }
+    [StringLength(30)] public string? PaymentStatus { get; init; } = "Pending";
+    [StringLength(2000)] public string? Notes { get; init; }
 }

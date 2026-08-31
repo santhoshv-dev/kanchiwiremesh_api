@@ -71,6 +71,7 @@ public sealed class Customer : AuditableEntity
     public string? GstNumber { get; set; }
     public string? BusinessType { get; set; }
     public string? Notes { get; set; }
+    public decimal OpeningBalance { get; set; }
     public bool IsActive { get; set; } = true;
 
     public ICollection<Enquiry> Enquiries { get; set; } = new List<Enquiry>();
@@ -100,6 +101,7 @@ public sealed class Product : AuditableEntity
     public bool IsActive { get; set; } = true;
 
     public ICollection<SalesOrderItem> OrderItems { get; set; } = new List<SalesOrderItem>();
+    public ICollection<ProductTransaction> ProductTransactions { get; set; } = new List<ProductTransaction>();
 }
 
 public sealed class Enquiry : AuditableEntity
@@ -210,4 +212,46 @@ public sealed class Payment : AuditableEntity
     public string? Reference { get; set; }
     public string? Notes { get; set; }
     public bool IsAdvance { get; set; }
+}
+
+
+public sealed class ProductTransaction : AuditableEntity
+{
+    public string TransactionNumber { get; set; } = string.Empty;
+    public Guid ProductId { get; set; }
+    public Product Product { get; set; } = null!;
+
+    public string TransactionType { get; set; } = "Sale";
+
+    public string? PartyName { get; set; }
+    public string? PartyMobile { get; set; }
+    public string? PartyLocation { get; set; }
+
+    public DateOnly TransactionDate { get; set; } = DateOnly.FromDateTime(DateTime.UtcNow);
+    public decimal Quantity { get; set; }
+    public decimal Amount { get; set; }
+    public string PaymentStatus { get; set; } = "Paid";
+    public string? Notes { get; set; }
+}
+
+public sealed class PurchaseRecord : AuditableEntity
+{
+    public string PurchaseNumber { get; set; } = string.Empty;
+
+    public string ProductName { get; set; } = string.Empty;
+    public string? ProductCode { get; set; }
+
+    public string? BuyerName { get; set; }
+    public string? BuyerContactNumber { get; set; }
+    public string? BuyerGstNumber { get; set; }
+    public string? BuyerLocation { get; set; }
+    public string? SupplierName { get; set; }
+
+    public DateOnly PurchaseDate { get; set; }
+    public decimal QuantityPurchased { get; set; }
+    public decimal PurchaseAmount { get; set; }
+    public decimal? GstAmount { get; set; }
+    public decimal? GstRate { get; set; }
+    public string PaymentStatus { get; set; } = "Pending";
+    public string? Notes { get; set; }
 }

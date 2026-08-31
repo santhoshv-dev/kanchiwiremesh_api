@@ -16,7 +16,8 @@ public sealed record CustomerListItemDto(
     int OrderCount,
     decimal TotalSales,
     decimal TotalPaid,
-    decimal Outstanding);
+    decimal Outstanding,
+    decimal OpeningBalance = 0m);
 
 public sealed record CustomerDetailDto(
     Guid Id,
@@ -41,7 +42,8 @@ public sealed record CustomerDetailDto(
     decimal TotalPaid,
     decimal Outstanding,
     DateTime CreatedAtUtc,
-    DateTime UpdatedAtUtc);
+    DateTime UpdatedAtUtc,
+    decimal OpeningBalance = 0m);
 
 public sealed record ProductDto(
     Guid Id,
@@ -258,3 +260,54 @@ public sealed record AuthenticatedUserDto(
     string DisplayName,
     string Role,
     bool MustChangePassword);
+
+
+public sealed record ProductTransactionDto(
+    Guid Id,
+    string TransactionNumber,
+    Guid ProductId,
+    string ProductName,
+    string? ProductCode,
+    string TransactionType,
+    string? PartyName,
+    string? PartyMobile,
+    string? PartyLocation,
+    DateOnly TransactionDate,
+    decimal Quantity,
+    string Unit,
+    decimal Amount,
+    string PaymentStatus,
+    string? Notes,
+    DateTime CreatedAtUtc,
+    DateTime UpdatedAtUtc);
+
+public sealed record ProductTransactionsSummaryDto(
+    Guid ProductId,
+    string ProductName,
+    string ProductCode,
+    string Unit,
+    decimal TotalQuantitySold,
+    decimal TotalQuantityPurchased,
+    decimal TotalSalesAmount,
+    decimal TotalPurchasesAmount,
+    int TransactionCount);
+
+public sealed record PurchaseRecordDto(
+    Guid Id,
+    string PurchaseNumber,
+    string ProductName,
+    string? ProductCode,
+    string? BuyerName,
+    string? BuyerContactNumber,
+    string? BuyerGstNumber,
+    string? BuyerLocation,
+    string? SupplierName,
+    DateOnly PurchaseDate,
+    decimal QuantityPurchased,
+    decimal PurchaseAmount,
+    decimal? GstAmount,
+    decimal? GstRate,
+    string PaymentStatus,
+    string? Notes,
+    DateTime CreatedAtUtc,
+    DateTime UpdatedAtUtc);

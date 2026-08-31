@@ -12,6 +12,26 @@ public static class DtoMappings
         product.QuantityOnHand <= 0m,
         product.Description, product.IsActive, product.UpdatedAtUtc);
 
+    public static PurchaseRecordDto ToDto(this PurchaseRecord purchase) => new(
+        purchase.Id,
+        purchase.PurchaseNumber,
+        purchase.ProductName,
+        purchase.ProductCode,
+        purchase.BuyerName,
+        purchase.BuyerContactNumber,
+        purchase.BuyerGstNumber,
+        purchase.BuyerLocation,
+        purchase.SupplierName,
+        purchase.PurchaseDate,
+        purchase.QuantityPurchased,
+        purchase.PurchaseAmount,
+        purchase.GstAmount,
+        purchase.GstRate,
+        purchase.PaymentStatus,
+        purchase.Notes,
+        purchase.CreatedAtUtc,
+        purchase.UpdatedAtUtc);
+
     public static EnquiryDto ToDto(this Enquiry enquiry) => new(
         enquiry.Id, enquiry.EnquiryNumber, enquiry.CustomerId,
         enquiry.Customer is null ? null : DisplayCustomerName(enquiry.Customer), enquiry.ContactName,
