@@ -259,6 +259,30 @@ public sealed class OrdersController(KanchimeshDbContext database) : ApiControll
         return Ok(ToDetailDto(order));
     }
 
+    [HttpPatch("{id:guid}/invoice-number")]
+    [ProducesResponseType(typeof(OrderDetailDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<OrderDetailDto>> UpdateInvoiceNumber(
+        Guid id,
+        OrderInvoiceNumberRequest request,
+        CancellationToken cancellationToken)
+    {
+        var order = await GetOrderGraph(id, tracking: true, cancellationToken);
+        if (order is null)
+        {
+            return NotFound();
+        }
+
+        if (!string.IsNullOrWhiteSpace(request.InvoiceNumber))
+        {
+            order.OrderNumber = request.InvoiceNumber.Trim();
+            await database.SaveChangesAsync(cancellationToken);
+        }
+
+        return Ok(ToDetailDto(order));
+    }
+
+
     [HttpDelete("{id:guid}")]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]

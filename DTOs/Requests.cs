@@ -161,6 +161,11 @@ public sealed class OrderStatusRequest
     [Required, StringLength(30)] public string Status { get; init; } = string.Empty;
 }
 
+public sealed class OrderInvoiceNumberRequest
+{
+    [Required, StringLength(64)] public string InvoiceNumber { get; init; } = string.Empty;
+}
+
 public sealed class PaymentRequest
 {
     // customerName/orderId/date are compatibility aliases for the Flutter wireframe client.
