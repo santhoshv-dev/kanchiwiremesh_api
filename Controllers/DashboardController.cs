@@ -16,9 +16,12 @@ public sealed class DashboardController(KanchimeshDbContext database) : ApiContr
         var customerCount = await database.Customers.CountAsync(customer => customer.IsActive, cancellationToken);
         var activeProductCount = await database.Products.CountAsync(product => product.IsActive, cancellationToken);
         var newEnquiryCount = await database.Enquiries.CountAsync(enquiry => enquiry.Status == "New", cancellationToken);
-        var completedOrderCount = await database.SalesOrders.CountAsync(order => order.Status == "Delivered", cancellationToken);
+        // "Completed" is the canonical current workflow value. Retain
+        // "Delivered" in the aggregate for records created by older clients.
+        var completedOrderCount = await database.SalesOrders.CountAsync(order =>
+            order.Status == "Completed" || order.Status == "Delivered", cancellationToken);
         var pendingOrderCount = await database.SalesOrders.CountAsync(order =>
-            order.Status == "New" || order.Status == "Processing" || order.Status == "Ready" || order.Status == "Dispatched",
+            order.Status != "Cancelled" && order.Status != "Completed" && order.Status != "Delivered",
             cancellationToken);
 
         var currentMonth = DateOnly.FromDateTime(DateTime.UtcNow);
@@ -52,8 +55,9 @@ public sealed class DashboardController(KanchimeshDbContext database) : ApiContr
             .ThenByDescending(order => order.CreatedAtUtc)
             .Take(5)
             .ToListAsync(cancellationToken);
+        // Deactivated customers retain their financial history, so their
+        // opening balances must remain in the organization-wide totals.
         var totalOpeningBalances = await database.Customers
-            .Where(customer => customer.IsActive)
             .SumAsync(customer => (decimal?)customer.OpeningBalance, cancellationToken) ?? 0m;
         var totalSales = (await database.SalesOrders
             .Where(order => order.Status != "Cancelled")

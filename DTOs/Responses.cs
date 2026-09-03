@@ -279,7 +279,12 @@ public sealed record ProductTransactionDto(
     string PaymentStatus,
     string? Notes,
     DateTime CreatedAtUtc,
-    DateTime UpdatedAtUtc);
+    DateTime UpdatedAtUtc,
+    // Sales-order lines are projected into the product history rather than
+    // persisted as a second stock-moving ledger entry.  These markers let a
+    // client present them as read-only and link back to their source order.
+    bool IsOrderSale = false,
+    Guid? SourceOrderId = null);
 
 public sealed record ProductTransactionsSummaryDto(
     Guid ProductId,

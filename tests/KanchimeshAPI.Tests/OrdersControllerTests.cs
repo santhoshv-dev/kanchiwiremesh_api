@@ -92,6 +92,56 @@ public sealed class OrdersControllerTests
     }
 
     [Fact]
+    public async Task CreateOrder_PreventsOrderingMoreThanAvailableStock()
+    {
+        await using var database = CreateDatabase();
+        var customer = new Customer
+        {
+            CustomerCode = "CUS-STOCK-CREATE",
+            ContactName = "Stock Customer",
+            Phone = "9876543210",
+        };
+        var product = new Product
+        {
+            ProductCode = "PRD-STOCK-CREATE",
+            Name = "Available mesh",
+            Category = "Mesh",
+            Unit = "pcs",
+            QuantityOnHand = 5m,
+        };
+        database.AddRange(customer, product);
+        await database.SaveChangesAsync();
+        var controller = new OrdersController(database);
+
+        var response = await controller.CreateOrder(
+            new OrderRequest
+            {
+                CustomerId = customer.Id,
+                OrderDate = new DateOnly(2026, 8, 27),
+                Status = "Pending",
+                Items =
+                [
+                    new OrderItemRequest
+                    {
+                        ProductId = product.Id,
+                        Description = product.Name,
+                        Quantity = 6m,
+                        Unit = "pcs",
+                        Rate = 100m,
+                    },
+                ],
+            },
+            CancellationToken.None);
+
+        var badRequest = Assert.IsType<BadRequestObjectResult>(response.Result);
+        var problem = Assert.IsType<ValidationProblemDetails>(badRequest.Value);
+        Assert.Contains(nameof(OrderRequest.Items), problem.Errors.Keys);
+        Assert.Empty(await database.SalesOrders.AsNoTracking().ToListAsync());
+        database.ChangeTracker.Clear();
+        Assert.Equal(5m, (await database.Products.SingleAsync(item => item.Id == product.Id)).QuantityOnHand);
+    }
+
+    [Fact]
     public async Task UpdateOrder_ReturnsBadRequestForAQuantityAndRateThatWouldOverflow()
     {
         await using var database = CreateDatabase();
@@ -309,6 +359,80 @@ public sealed class OrdersControllerTests
     }
 
     [Fact]
+    public async Task UpdateOrder_PreventsAnIncreaseBeyondAvailableStockWhileKeepingItsCurrentAllocation()
+    {
+        await using var database = CreateDatabase();
+        var customer = new Customer
+        {
+            CustomerCode = "CUS-STOCK-UPDATE",
+            ContactName = "Stock Update Customer",
+            Phone = "9876543210",
+        };
+        var product = new Product
+        {
+            ProductCode = "PRD-STOCK-UPDATE",
+            Name = "Update mesh",
+            Category = "Mesh",
+            Unit = "pcs",
+            QuantityOnHand = 5m,
+        };
+        database.AddRange(customer, product);
+        await database.SaveChangesAsync();
+        var controller = new OrdersController(database);
+        var created = await controller.CreateOrder(
+            new OrderRequest
+            {
+                CustomerId = customer.Id,
+                OrderDate = new DateOnly(2026, 8, 27),
+                Status = "Pending",
+                Items =
+                [
+                    new OrderItemRequest
+                    {
+                        ProductId = product.Id,
+                        Description = product.Name,
+                        Quantity = 3m,
+                        Unit = "pcs",
+                        Rate = 100m,
+                    },
+                ],
+            },
+            CancellationToken.None);
+        var createdResult = Assert.IsType<CreatedAtActionResult>(created.Result);
+        var order = Assert.IsType<OrderDetailDto>(createdResult.Value);
+
+        var response = await controller.UpdateOrder(
+            order.Id,
+            new OrderRequest
+            {
+                CustomerId = customer.Id,
+                OrderDate = order.OrderDate,
+                Status = "Pending",
+                Items =
+                [
+                    new OrderItemRequest
+                    {
+                        ProductId = product.Id,
+                        Description = product.Name,
+                        Quantity = 6m,
+                        Unit = "pcs",
+                        Rate = 100m,
+                    },
+                ],
+            },
+            CancellationToken.None);
+
+        var badRequest = Assert.IsType<BadRequestObjectResult>(response.Result);
+        var problem = Assert.IsType<ValidationProblemDetails>(badRequest.Value);
+        Assert.Contains(nameof(OrderRequest.Items), problem.Errors.Keys);
+        database.ChangeTracker.Clear();
+        var persistedOrder = await database.SalesOrders.Include(item => item.Items).SingleAsync(item => item.Id == order.Id);
+        var persistedProduct = await database.Products.SingleAsync(item => item.Id == product.Id);
+        Assert.Equal(3m, persistedOrder.Items.Single().Quantity);
+        Assert.Equal(2m, persistedProduct.QuantityOnHand);
+    }
+
+    [Fact]
     public async Task UpdateOrder_ChangesAManualLineQuantityWithoutTryingToAdjustStock()
     {
         await using var database = CreateDatabase();
@@ -487,26 +611,60 @@ public sealed class OrdersControllerTests
     }
 
     [Fact]
-    public async Task DeleteOrder_ReturnsConflictToPreventInvoiceNumberReuse()
+    public async Task DeleteOrder_RestoresStockAndKeepsRecordedPaymentsWithTheCustomer()
     {
         await using var database = CreateDatabase();
         var customer = new Customer
         {
-            CustomerCode = "CUS-NO-DELETE",
-            ContactName = "No Delete Customer",
+            CustomerCode = "CUS-DELETE",
+            ContactName = "Delete Customer",
             Phone = "9876543210",
         };
-        database.Customers.Add(customer);
+        var product = new Product
+        {
+            ProductCode = "PRD-DELETE",
+            Name = "Delete mesh",
+            Category = "Mesh",
+            Unit = "pcs",
+            QuantityOnHand = 10m,
+        };
+        database.AddRange(customer, product);
         await database.SaveChangesAsync();
         var controller = new OrdersController(database);
-        var created = await CreateSimpleOrder(controller, customer.Id, new DateOnly(2026, 8, 27));
+        var createdResponse = await controller.CreateOrder(
+            new OrderRequest
+            {
+                CustomerId = customer.Id,
+                OrderDate = new DateOnly(2026, 8, 27),
+                Status = "Pending",
+                PaidAmount = 25m,
+                Items =
+                [
+                    new OrderItemRequest
+                    {
+                        ProductId = product.Id,
+                        Description = product.Name,
+                        Quantity = 4m,
+                        Unit = "pcs",
+                        Rate = 100m,
+                    },
+                ],
+            },
+            CancellationToken.None);
+        var createdResult = Assert.IsType<CreatedAtActionResult>(createdResponse.Result);
+        var created = Assert.IsType<OrderDetailDto>(createdResult.Value);
 
         var response = await controller.DeleteOrder(created.Id, CancellationToken.None);
 
-        var conflict = Assert.IsType<ConflictObjectResult>(response);
-        var problem = Assert.IsType<ProblemDetails>(conflict.Value);
-        Assert.Equal(409, problem.Status);
-        Assert.True(await database.SalesOrders.AnyAsync(item => item.Id == created.Id));
+        Assert.IsType<NoContentResult>(response);
+        database.ChangeTracker.Clear();
+        Assert.False(await database.SalesOrders.AnyAsync(item => item.Id == created.Id));
+        var persistedProduct = await database.Products.SingleAsync(item => item.Id == product.Id);
+        Assert.Equal(10m, persistedProduct.QuantityOnHand);
+        Assert.Equal(0m, persistedProduct.TotalSold);
+        var payment = await database.Payments.SingleAsync();
+        Assert.Equal(customer.Id, payment.CustomerId);
+        Assert.Null(payment.SalesOrderId);
     }
 
     [Fact]

@@ -54,9 +54,16 @@ public sealed class PaymentsController(KanchimeshDbContext database) : ApiContro
     [ProducesResponseType(typeof(PaymentSummaryDto), StatusCodes.Status200OK)]
     public async Task<ActionResult<PaymentSummaryDto>> GetSummary(CancellationToken cancellationToken)
     {
-        var sales = await database.SalesOrders.AsNoTracking()
+        var orderSales = await database.SalesOrders.AsNoTracking()
             .Where(order => order.Status != "Cancelled")
             .SumAsync(order => (decimal?)order.GrandTotal, cancellationToken) ?? 0m;
+        // Opening balances are debit-side customer balances, just like sales
+        // orders. Include them here so a receipt recorded directly against a
+        // customer changes the same outstanding balance in every financial
+        // summary.
+        var openingBalances = await database.Customers.AsNoTracking()
+            .SumAsync(customer => (decimal?)customer.OpeningBalance, cancellationToken) ?? 0m;
+        var sales = orderSales + openingBalances;
         var payments = await database.Payments.AsNoTracking()
             .Include(payment => payment.SalesOrder)
             .ToListAsync(cancellationToken);
@@ -64,7 +71,7 @@ public sealed class PaymentsController(KanchimeshDbContext database) : ApiContro
         var totalReceived = validPayments.Sum(payment => payment.Amount);
         var totalAdvance = validPayments.Where(payment => payment.IsAdvance).Sum(payment => payment.Amount);
         var appliedToOrders = validPayments.Where(payment => !payment.IsAdvance && payment.SalesOrderId.HasValue).Sum(payment => payment.Amount);
-        return Ok(new PaymentSummaryDto(sales, totalReceived, Math.Max(sales - appliedToOrders, 0m), totalAdvance, appliedToOrders));
+        return Ok(new PaymentSummaryDto(sales, totalReceived, Math.Max(sales - totalReceived, 0m), totalAdvance, appliedToOrders));
     }
 
     [HttpGet("{id:guid}")]
@@ -208,15 +215,7 @@ public sealed class PaymentsController(KanchimeshDbContext database) : ApiContro
 
         var orderId = payment.SalesOrderId;
         database.Payments.Remove(payment);
-        
-        if (orderId.HasValue)
-        {
-            var order = await database.SalesOrders.FindAsync([orderId.Value], cancellationToken);
-            if (order != null)
-            {
-                await OrderCalculator.SyncOrderCompletionAsync(database, order, cancellationToken);
-            }
-        }
+        await SyncLinkedOrderCompletionAsync(cancellationToken, orderId);
 
         await database.SaveChangesAsync(cancellationToken);
         return NoContent();
@@ -235,11 +234,6 @@ public sealed class PaymentsController(KanchimeshDbContext database) : ApiContro
         if (request.IsAdvance && request.SalesOrderId.HasValue)
         {
             return (nameof(request.SalesOrderId), "An advance payment cannot be linked to a specific order.");
-        }
-
-        if (!request.IsAdvance && !request.SalesOrderId.HasValue)
-        {
-            return (nameof(request.SalesOrderId), "A non-advance payment must be linked to a sales order.");
         }
 
         if (request.IsAdvance)
@@ -396,15 +390,7 @@ public sealed class PaymentsController(KanchimeshDbContext database) : ApiContro
         };
         Apply(payment, request, method);
         database.Payments.Add(payment);
-        
-        if (payment.SalesOrderId.HasValue)
-        {
-            var order = await database.SalesOrders.FindAsync([payment.SalesOrderId.Value], cancellationToken);
-            if (order != null)
-            {
-                await OrderCalculator.SyncOrderCompletionAsync(database, order, cancellationToken);
-            }
-        }
+        await SyncLinkedOrderCompletionAsync(cancellationToken, payment.SalesOrderId);
         await database.SaveChangesAsync(cancellationToken);
     }
 
@@ -420,6 +406,7 @@ public sealed class PaymentsController(KanchimeshDbContext database) : ApiContro
             throw new PaymentNotFoundException();
         }
 
+        var previousOrderId = payment.SalesOrderId;
         var relationError = await ValidateRelations(request, paymentId, cancellationToken);
         if (relationError is not null)
         {
@@ -427,17 +414,27 @@ public sealed class PaymentsController(KanchimeshDbContext database) : ApiContro
         }
 
         Apply(payment, request, method);
+        // A payment can be moved from an order to the customer's unlinked
+        // balance (or to another order). Re-evaluate both sides so an old
+        // order never remains marked complete after its receipt is removed.
+        await SyncLinkedOrderCompletionAsync(cancellationToken, previousOrderId, payment.SalesOrderId);
 
-        if (payment.SalesOrderId.HasValue)
+        await database.SaveChangesAsync(cancellationToken);
+    }
+
+    private async Task SyncLinkedOrderCompletionAsync(CancellationToken cancellationToken, params Guid?[] orderIds)
+    {
+        foreach (var orderId in orderIds
+                     .Where(id => id.HasValue)
+                     .Select(id => id!.Value)
+                     .Distinct())
         {
-            var order = await database.SalesOrders.FindAsync([payment.SalesOrderId.Value], cancellationToken);
-            if (order != null)
+            var order = await database.SalesOrders.FindAsync([orderId], cancellationToken);
+            if (order is not null)
             {
                 await OrderCalculator.SyncOrderCompletionAsync(database, order, cancellationToken);
             }
         }
-
-        await database.SaveChangesAsync(cancellationToken);
     }
 
     private Task<bool> PaymentMatchesRequest(

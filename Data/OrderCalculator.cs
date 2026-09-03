@@ -31,7 +31,21 @@ public static class OrderCalculator
     {
         await database.Entry(order).Collection(o => o.Payments).LoadAsync(cancellationToken);
 
-        var paidAmount = order.Payments.Where(p => !p.IsAdvance).Sum(p => p.Amount);
+        // A payment mutation is synchronized before SaveChanges so order status
+        // is persisted atomically with the receipt. EF may therefore retain a
+        // deleted payment in the loaded navigation, or not yet add a receipt
+        // that was moved to this order. Build the effective collection from
+        // both sources and only count current, non-deleted links.
+        var trackedPayments = database.ChangeTracker.Entries<Payment>()
+            .Where(entry => entry.State != EntityState.Deleted && entry.Entity.SalesOrderId == order.Id)
+            .Select(entry => entry.Entity);
+        var paidAmount = order.Payments
+            .Concat(trackedPayments)
+            .DistinctBy(payment => payment.Id)
+            .Where(payment => payment.SalesOrderId == order.Id &&
+                database.Entry(payment).State != EntityState.Deleted &&
+                !payment.IsAdvance)
+            .Sum(payment => payment.Amount);
         
         bool isFullyPaid = paidAmount >= order.GrandTotal && order.GrandTotal > 0;
         

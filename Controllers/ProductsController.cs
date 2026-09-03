@@ -75,12 +75,31 @@ public sealed class ProductsController(KanchimeshDbContext database) : ApiContro
         Apply(product, request);
         database.Products.Add(product);
 
+        // Initial stock is a real inventory movement.  Recording it in the
+        // same product history used by later adjustments keeps the displayed
+        // balance and its audit trail aligned from the first save.
+        if (initialStock > 0m)
+        {
+            database.ProductTransactions.Add(new ProductTransaction
+            {
+                ProductId = product.Id,
+                TransactionNumber = DocumentNumbers.New("PA"),
+                TransactionType = "Adjustment",
+                TransactionDate = DateOnly.FromDateTime(DateTime.UtcNow),
+                Quantity = initialStock,
+                Amount = 0m,
+                PaymentStatus = "Not Applicable",
+                Notes = "Initial stock",
+            });
+        }
+
         await database.SaveChangesAsync(cancellationToken);
         return CreatedAtAction(nameof(GetProduct), new { product.Id }, product.ToDto());
     }
 
     [HttpPut("{id:guid}")]
     [ProducesResponseType(typeof(ProductDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<ActionResult<ProductDto>> UpdateProduct(Guid id, ProductRequest request, CancellationToken cancellationToken)
     {
@@ -92,7 +111,9 @@ public sealed class ProductsController(KanchimeshDbContext database) : ApiContro
 
         if (request.InitialStock.HasValue)
         {
-            product.QuantityOnHand = request.InitialStock.Value;
+            return ValidationError(
+                nameof(request.InitialStock),
+                "Use the stock adjustment action to increase or decrease an existing product's stock.");
         }
 
         Apply(product, request);
@@ -102,21 +123,56 @@ public sealed class ProductsController(KanchimeshDbContext database) : ApiContro
 
     [HttpPost("{id:guid}/adjustments")]
     [ProducesResponseType(typeof(ProductDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<ActionResult<ProductDto>> AdjustStock(Guid id, [FromBody] StockAdjustmentRequest request, CancellationToken cancellationToken)
     {
+        const decimal maximumQuantity = 999_999_999_999_999m;
+        if (request.QuantityChange == 0m)
+        {
+            return ValidationError(nameof(request.QuantityChange), "Enter a non-zero quantity to increase or decrease stock.");
+        }
+
+        if (request.QuantityChange is < -maximumQuantity or > maximumQuantity ||
+            !FitsScale(request.QuantityChange, 0.001m))
+        {
+            return ValidationError(nameof(request.QuantityChange), "Stock quantity must have at most 3 decimal places and be within the supported range.");
+        }
+
         var product = await database.Products.SingleOrDefaultAsync(item => item.Id == id, cancellationToken);
         if (product is null)
         {
             return NotFound();
         }
 
+        if (request.QuantityChange < 0m && product.QuantityOnHand < -request.QuantityChange)
+        {
+            return ValidationError(
+                nameof(request.QuantityChange),
+                $"Cannot decrease {product.Name} below zero. Available stock is {product.QuantityOnHand:0.###} {product.Unit}.");
+        }
+
         product.QuantityOnHand += request.QuantityChange;
-        
+
         if (request.QuantityChange > 0)
         {
             product.TotalStockAdded += request.QuantityChange;
         }
+
+        // Keep a single lightweight inventory ledger for the simple
+        // increase/decrease flow.  The sign of Quantity records the direction
+        // without asking the user for a separate stock-details form.
+        database.ProductTransactions.Add(new ProductTransaction
+        {
+            ProductId = product.Id,
+            TransactionNumber = DocumentNumbers.New("PA"),
+            TransactionType = "Adjustment",
+            TransactionDate = DateOnly.FromDateTime((request.OccurredAtUtc ?? DateTime.UtcNow).ToUniversalTime()),
+            Quantity = request.QuantityChange,
+            Amount = 0m,
+            PaymentStatus = "Not Applicable",
+            Notes = BuildAdjustmentNotes(request),
+        });
 
         await database.SaveChangesAsync(cancellationToken);
         return Ok(product.ToDto());
@@ -158,4 +214,26 @@ public sealed class ProductsController(KanchimeshDbContext database) : ApiContro
     }
 
     private static string? Null(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
+    private static bool FitsScale(decimal value, decimal smallestUnit) =>
+        value % smallestUnit == 0m;
+
+    private static string BuildAdjustmentNotes(StockAdjustmentRequest request)
+    {
+        var details = new List<string>
+        {
+            request.QuantityChange > 0m ? "Stock increased" : "Stock decreased",
+        };
+        if (!string.IsNullOrWhiteSpace(request.Reason))
+        {
+            details.Add(request.Reason.Trim());
+        }
+
+        if (!string.IsNullOrWhiteSpace(request.Reference))
+        {
+            details.Add($"Reference: {request.Reference.Trim()}");
+        }
+
+        return string.Join(". ", details);
+    }
 }

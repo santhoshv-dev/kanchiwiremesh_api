@@ -150,6 +150,10 @@ public sealed class OrdersController(KanchimeshDbContext database) : ApiControll
         {
             return OrderNumberExhaustedConflict();
         }
+        catch (InsufficientStockException exception)
+        {
+            return ValidationError(nameof(request.Items), exception.Message);
+        }
 
         var order = await GetOrderGraph(orderId, tracking: false, cancellationToken);
         if (order is null)
@@ -217,6 +221,21 @@ public sealed class OrdersController(KanchimeshDbContext database) : ApiControll
             return PaidOrderCancellationConflict();
         }
 
+        if (!IsCancelled(status))
+        {
+            var currentAllocation = IsCancelled(order.Status)
+                ? EmptyProductQuantities
+                : GetProductQuantities(order.Items);
+            var stockError = await GetStockAvailabilityErrorAsync(
+                GetProductQuantities(request.Items),
+                currentAllocation,
+                cancellationToken);
+            if (stockError is not null)
+            {
+                return ValidationError(nameof(request.Items), stockError);
+            }
+        }
+
         ReplaceOrderValues(order, request, status);
         var appliedPaymentTotal = order.Payments.Where(payment => !payment.IsAdvance).Sum(payment => payment.Amount);
         if (order.GrandTotal < appliedPaymentTotal)
@@ -254,6 +273,18 @@ public sealed class OrdersController(KanchimeshDbContext database) : ApiControll
             return PaidOrderCancellationConflict();
         }
 
+        if (IsCancelled(order.Status) && !IsCancelled(status))
+        {
+            var stockError = await GetStockAvailabilityErrorAsync(
+                GetProductQuantities(order.Items),
+                EmptyProductQuantities,
+                cancellationToken);
+            if (stockError is not null)
+            {
+                return ValidationError(nameof(request.Status), stockError);
+            }
+        }
+
         order.Status = status;
         await database.SaveChangesAsync(cancellationToken);
         return Ok(ToDetailDto(order));
@@ -284,27 +315,28 @@ public sealed class OrdersController(KanchimeshDbContext database) : ApiControll
 
 
     [HttpDelete("{id:guid}")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
     public async Task<IActionResult> DeleteOrder(Guid id, CancellationToken cancellationToken)
     {
-        var order = await database.SalesOrders
-            .SingleOrDefaultAsync(item => item.Id == id, cancellationToken);
+        var order = await GetOrderGraph(id, tracking: true, cancellationToken);
         if (order is null)
         {
             return NotFound();
         }
 
-        // An order number is now an issued invoice number. Retaining cancelled
-        // orders prevents a printed number from being reused and preserves the
-        // audit trail; cancellation also restores stock through the normal
-        // status workflow.
-        return Conflict(new ProblemDetails
+        // Payments remain customer receipts when their optional source order
+        // is removed.  This makes deletion safe for outstanding/received
+        // figures while the DbContext restores the stock consumed by active
+        // order lines in the same SaveChanges operation.
+        foreach (var payment in order.Payments)
         {
-            Status = StatusCodes.Status409Conflict,
-            Title = "Issued orders cannot be deleted.",
-            Detail = "Cancel the order instead to preserve its invoice number and restore its stock."
-        });
+            payment.SalesOrderId = null;
+        }
+
+        database.SalesOrders.Remove(order);
+        await database.SaveChangesAsync(cancellationToken);
+        return NoContent();
     }
 
     private async Task<(string Field, string Message)?> ValidateRelations(OrderRequest request, CancellationToken cancellationToken)
@@ -510,11 +542,23 @@ public sealed class OrdersController(KanchimeshDbContext database) : ApiControll
         string status,
         CancellationToken cancellationToken)
     {
+        if (!IsCancelled(status))
+        {
+            var stockError = await GetStockAvailabilityErrorAsync(
+                GetProductQuantities(request.Items),
+                EmptyProductQuantities,
+                cancellationToken);
+            if (stockError is not null)
+            {
+                throw new InsufficientStockException(stockError);
+            }
+        }
+
         var existingOrderNumbers = await database.SalesOrders.AsNoTracking()
             .Select(order => order.OrderNumber)
             .ToListAsync(cancellationToken);
         
-        var isNonGst = request.GstType == "None" || request.Items.All(i => i.IgstRate == 0 && i.CgstRate == 0 && i.SgstRate == 0);
+        var isNonGst = string.Equals(request.GstType, "None", StringComparison.OrdinalIgnoreCase);
         var orderNumber = isNonGst ? $"ORD-{orderId.ToString()[..8].ToUpperInvariant()}" : GetNextOrderNumber(request.OrderDate, existingOrderNumbers);
 
         var order = new SalesOrder
@@ -566,6 +610,83 @@ public sealed class OrdersController(KanchimeshDbContext database) : ApiControll
     private static bool CannotCancel(string status, SalesOrder order) =>
         string.Equals(status, "Cancelled", StringComparison.OrdinalIgnoreCase) && order.Payments.Count > 0;
 
+    private static bool IsCancelled(string status) =>
+        string.Equals(status, "Cancelled", StringComparison.OrdinalIgnoreCase);
+
+    private static readonly IReadOnlyDictionary<Guid, decimal> EmptyProductQuantities =
+        new Dictionary<Guid, decimal>();
+
+    private static Dictionary<Guid, decimal> GetProductQuantities(IEnumerable<OrderItemRequest> items)
+    {
+        var quantities = new Dictionary<Guid, decimal>();
+        foreach (var item in items)
+        {
+            if (!item.ProductId.HasValue)
+            {
+                continue;
+            }
+
+            quantities[item.ProductId.Value] = quantities.GetValueOrDefault(item.ProductId.Value) + item.Quantity;
+        }
+
+        return quantities;
+    }
+
+    private static Dictionary<Guid, decimal> GetProductQuantities(IEnumerable<SalesOrderItem> items)
+    {
+        var quantities = new Dictionary<Guid, decimal>();
+        foreach (var item in items)
+        {
+            if (!item.ProductId.HasValue)
+            {
+                continue;
+            }
+
+            quantities[item.ProductId.Value] = quantities.GetValueOrDefault(item.ProductId.Value) + item.Quantity;
+        }
+
+        return quantities;
+    }
+
+    private async Task<string?> GetStockAvailabilityErrorAsync(
+        IReadOnlyDictionary<Guid, decimal> requestedQuantities,
+        IReadOnlyDictionary<Guid, decimal> currentAllocation,
+        CancellationToken cancellationToken)
+    {
+        if (requestedQuantities.Count == 0)
+        {
+            return null;
+        }
+
+        var productIds = requestedQuantities.Keys.ToList();
+        var products = await database.Products
+            .AsNoTracking()
+            .Where(product => productIds.Contains(product.Id))
+            .Select(product => new ProductStock(product.Id, product.Name, product.Unit, product.QuantityOnHand, product.IsActive))
+            .ToListAsync(cancellationToken);
+        var stockByProductId = products.ToDictionary(product => product.Id);
+
+        foreach (var (productId, requestedQuantity) in requestedQuantities)
+        {
+            if (!stockByProductId.TryGetValue(productId, out var product) || !product.IsActive)
+            {
+                return "A selected product is no longer available.";
+            }
+
+            var alreadyAllocated = currentAllocation.GetValueOrDefault(productId);
+            var additionalQuantity = requestedQuantity - alreadyAllocated;
+            if (additionalQuantity <= product.QuantityOnHand)
+            {
+                continue;
+            }
+
+            var availableForThisOrder = product.QuantityOnHand + alreadyAllocated;
+            return $"Insufficient stock for {product.Name}. Available stock is {availableForThisOrder:0.###} {product.Unit}; requested quantity is {requestedQuantity:0.###} {product.Unit}.";
+        }
+
+        return null;
+    }
+
     private static string GetNextOrderNumber(DateOnly orderDate, IEnumerable<string> orderNumbers)
     {
         var financialYear = GetFinancialYear(orderDate);
@@ -609,6 +730,17 @@ public sealed class OrdersController(KanchimeshDbContext database) : ApiControll
     private sealed class OrderNumberExhaustedException : Exception
     {
     }
+
+    private sealed class InsufficientStockException(string message) : Exception(message)
+    {
+    }
+
+    private sealed record ProductStock(
+        Guid Id,
+        string Name,
+        string Unit,
+        decimal QuantityOnHand,
+        bool IsActive);
 
     private ConflictObjectResult OrderNumberExhaustedConflict() => Conflict(new ProblemDetails
     {
