@@ -191,7 +191,9 @@ public sealed class ProductsController(KanchimeshDbContext database) : ApiContro
                     }
                     else
                     {
-                        return NotFound();
+                        return BadRequest(new ValidationProblemDetails(new Dictionary<string, string[]> { 
+                            ["DbError"] = [$"The {entry.Entity.GetType().Name} record was deleted by another user. Please refresh."] 
+                        }) { Title = "Record Not Found" });
                     }
                 }
             }
