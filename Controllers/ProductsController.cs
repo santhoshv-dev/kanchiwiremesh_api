@@ -135,15 +135,30 @@ public sealed class ProductsController(KanchimeshDbContext database) : ApiContro
 
         Apply(product, request);
 
-        database.ProductRawMaterials.RemoveRange(product.RawMaterials);
-        if (request.RawMaterials?.Count > 0)
+        var existingRms = product.RawMaterials.ToList();
+        var incomingRms = request.RawMaterials ?? new List<ProductRawMaterialRequest>();
+
+        foreach (var existingRm in existingRms)
         {
-            foreach (var rm in request.RawMaterials)
+            if (!incomingRms.Any(r => r.RawMaterialId == existingRm.RawMaterialId))
+            {
+                database.ProductRawMaterials.Remove(existingRm);
+            }
+        }
+
+        foreach (var incomingRm in incomingRms)
+        {
+            var existing = existingRms.FirstOrDefault(r => r.RawMaterialId == incomingRm.RawMaterialId);
+            if (existing != null)
+            {
+                existing.ConsumptionQuantity = incomingRm.ConsumptionQuantity;
+            }
+            else
             {
                 product.RawMaterials.Add(new ProductRawMaterial
                 {
-                    RawMaterialId = rm.RawMaterialId,
-                    ConsumptionQuantity = rm.ConsumptionQuantity
+                    RawMaterialId = incomingRm.RawMaterialId,
+                    ConsumptionQuantity = incomingRm.ConsumptionQuantity
                 });
             }
         }
