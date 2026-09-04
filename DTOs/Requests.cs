@@ -80,6 +80,7 @@ public sealed class ProductRequest
     [Range(typeof(decimal), "0", "999999999999999")] public decimal? InitialStock { get; init; }
     [StringLength(2000)] public string? Description { get; init; }
     public bool IsActive { get; init; } = true;
+    public List<ProductRawMaterialRequest>? RawMaterials { get; init; }
 }
 
 public sealed class StockAdjustmentRequest
@@ -229,4 +230,18 @@ public sealed class PurchaseRecordRequest
     public decimal? GstRate { get; init; }
     [StringLength(30)] public string? PaymentStatus { get; init; } = "Pending";
     [StringLength(2000)] public string? Notes { get; init; }
+}
+
+public sealed class RawMaterialRequest
+{
+    [Required, StringLength(180)] public string Name { get; init; } = string.Empty;
+    [Range(typeof(decimal), "0", "999999999999999")] public decimal Quantity { get; init; }
+}
+
+public sealed class ProductRawMaterialRequest
+{
+    public Guid? Id { get; init; }
+    public Guid RawMaterialId { get; init; }
+    public string? RawMaterialName { get; init; }
+    [Range(typeof(decimal), "0.001", "999999999999999")] public decimal ConsumptionQuantity { get; init; }
 }

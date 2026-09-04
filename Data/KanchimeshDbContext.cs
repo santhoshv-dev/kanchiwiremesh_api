@@ -9,6 +9,8 @@ public sealed class KanchimeshDbContext(DbContextOptions<KanchimeshDbContext> op
     public DbSet<CompanyProfile> CompanyProfiles => Set<CompanyProfile>();
     public DbSet<Customer> Customers => Set<Customer>();
     public DbSet<Product> Products => Set<Product>();
+    public DbSet<RawMaterial> RawMaterials => Set<RawMaterial>();
+    public DbSet<ProductRawMaterial> ProductRawMaterials => Set<ProductRawMaterial>();
 
     public DbSet<Enquiry> Enquiries => Set<Enquiry>();
     public DbSet<EmailDeliveryJob> EmailDeliveryJobs => Set<EmailDeliveryJob>();
@@ -27,6 +29,7 @@ public sealed class KanchimeshDbContext(DbContextOptions<KanchimeshDbContext> op
         ConfigureAuditEntity<CompanyProfile>(modelBuilder.Entity<CompanyProfile>());
         ConfigureAuditEntity<Customer>(modelBuilder.Entity<Customer>());
         ConfigureAuditEntity<Product>(modelBuilder.Entity<Product>());
+        ConfigureAuditEntity<RawMaterial>(modelBuilder.Entity<RawMaterial>());
 
         ConfigureAuditEntity<Enquiry>(modelBuilder.Entity<Enquiry>());
         ConfigureAuditEntity<EmailDeliveryJob>(modelBuilder.Entity<EmailDeliveryJob>());
@@ -108,6 +111,31 @@ public sealed class KanchimeshDbContext(DbContextOptions<KanchimeshDbContext> op
             entity.Property(x => x.TotalStockAdded).HasPrecision(18, 3).HasDefaultValue(0m);
             entity.Property(x => x.TotalSold).HasPrecision(18, 3).HasDefaultValue(0m);
             entity.Property(x => x.ReorderLevel).HasPrecision(18, 3).HasDefaultValue(0m);
+        });
+
+        modelBuilder.Entity<RawMaterial>(entity =>
+        {
+            entity.Property(x => x.Name).HasMaxLength(180).IsRequired();
+            entity.Property(x => x.TotalStock).HasPrecision(18, 3).HasDefaultValue(0m);
+            entity.Property(x => x.UsedStock).HasPrecision(18, 3).HasDefaultValue(0m);
+            entity.Property(x => x.AvailableStock).HasPrecision(18, 3).HasComputedColumnSql("[TotalStock] - [UsedStock]");
+            entity.Property(x => x.IsActive).HasDefaultValue(true);
+        });
+
+        modelBuilder.Entity<ProductRawMaterial>(entity =>
+        {
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.ConsumptionQuantity).HasPrecision(18, 3).IsRequired();
+
+            entity.HasOne(x => x.Product)
+                .WithMany(x => x.RawMaterials)
+                .HasForeignKey(x => x.ProductId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(x => x.RawMaterial)
+                .WithMany(x => x.ProductRawMaterials)
+                .HasForeignKey(x => x.RawMaterialId)
+                .OnDelete(DeleteBehavior.Restrict);
         });
 
         modelBuilder.Entity<Enquiry>(entity =>

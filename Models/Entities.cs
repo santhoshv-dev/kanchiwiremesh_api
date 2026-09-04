@@ -102,6 +102,7 @@ public sealed class Product : AuditableEntity
 
     public ICollection<SalesOrderItem> OrderItems { get; set; } = new List<SalesOrderItem>();
     public ICollection<ProductTransaction> ProductTransactions { get; set; } = new List<ProductTransaction>();
+    public ICollection<ProductRawMaterial> RawMaterials { get; set; } = new List<ProductRawMaterial>();
 }
 
 public sealed class Enquiry : AuditableEntity
@@ -254,4 +255,25 @@ public sealed class PurchaseRecord : AuditableEntity
     public decimal? GstRate { get; set; }
     public string PaymentStatus { get; set; } = "Pending";
     public string? Notes { get; set; }
+}
+
+public sealed class RawMaterial : AuditableEntity
+{
+    public string Name { get; set; } = string.Empty;
+    public decimal TotalStock { get; set; }
+    public decimal UsedStock { get; set; }
+    public decimal AvailableStock { get; set; }
+    public bool IsActive { get; set; } = true;
+
+    public ICollection<ProductRawMaterial> ProductRawMaterials { get; set; } = new List<ProductRawMaterial>();
+}
+
+public sealed class ProductRawMaterial
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid ProductId { get; set; }
+    public Product Product { get; set; } = null!;
+    public Guid RawMaterialId { get; set; }
+    public RawMaterial RawMaterial { get; set; } = null!;
+    public decimal ConsumptionQuantity { get; set; }
 }

@@ -20,7 +20,7 @@ public sealed class ProductsController(KanchimeshDbContext database) : ApiContro
         CancellationToken cancellationToken = default)
     {
         (page, pageSize) = NormalizePage(page, pageSize);
-        var query = database.Products.AsNoTracking().AsQueryable();
+        var query = database.Products.Include(p => p.RawMaterials).ThenInclude(prm => prm.RawMaterial).AsNoTracking().AsQueryable();
         if (!includeInactive)
         {
             query = query.Where(product => product.IsActive);
@@ -57,7 +57,7 @@ public sealed class ProductsController(KanchimeshDbContext database) : ApiContro
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<ActionResult<ProductDto>> GetProduct(Guid id, CancellationToken cancellationToken)
     {
-        var product = await database.Products.AsNoTracking().SingleOrDefaultAsync(item => item.Id == id, cancellationToken);
+        var product = await database.Products.Include(p => p.RawMaterials).ThenInclude(prm => prm.RawMaterial).AsNoTracking().SingleOrDefaultAsync(item => item.Id == id, cancellationToken);
         return product is null ? NotFound() : Ok(product.ToDto());
     }
 
@@ -73,6 +73,23 @@ public sealed class ProductsController(KanchimeshDbContext database) : ApiContro
             TotalStockAdded = initialStock,
         };
         Apply(product, request);
+
+        if (request.RawMaterials?.Count > 0)
+        {
+            foreach (var rm in request.RawMaterials)
+            {
+                product.RawMaterials.Add(new ProductRawMaterial
+                {
+                    RawMaterialId = rm.RawMaterialId,
+                    ConsumptionQuantity = rm.ConsumptionQuantity
+                });
+            }
+            if (initialStock > 0m)
+            {
+                await ConsumeRawMaterialsAsync(product.RawMaterials, initialStock, cancellationToken);
+            }
+        }
+
         database.Products.Add(product);
 
         // Initial stock is a real inventory movement.  Recording it in the
@@ -103,7 +120,7 @@ public sealed class ProductsController(KanchimeshDbContext database) : ApiContro
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<ActionResult<ProductDto>> UpdateProduct(Guid id, ProductRequest request, CancellationToken cancellationToken)
     {
-        var product = await database.Products.SingleOrDefaultAsync(item => item.Id == id, cancellationToken);
+        var product = await database.Products.Include(p => p.RawMaterials).SingleOrDefaultAsync(item => item.Id == id, cancellationToken);
         if (product is null)
         {
             return NotFound();
@@ -117,6 +134,20 @@ public sealed class ProductsController(KanchimeshDbContext database) : ApiContro
         }
 
         Apply(product, request);
+
+        database.ProductRawMaterials.RemoveRange(product.RawMaterials);
+        if (request.RawMaterials?.Count > 0)
+        {
+            foreach (var rm in request.RawMaterials)
+            {
+                product.RawMaterials.Add(new ProductRawMaterial
+                {
+                    RawMaterialId = rm.RawMaterialId,
+                    ConsumptionQuantity = rm.ConsumptionQuantity
+                });
+            }
+        }
+
         await database.SaveChangesAsync(cancellationToken);
         return Ok(product.ToDto());
     }
@@ -139,7 +170,7 @@ public sealed class ProductsController(KanchimeshDbContext database) : ApiContro
             return ValidationError(nameof(request.QuantityChange), "Stock quantity must have at most 3 decimal places and be within the supported range.");
         }
 
-        var product = await database.Products.SingleOrDefaultAsync(item => item.Id == id, cancellationToken);
+        var product = await database.Products.Include(p => p.RawMaterials).SingleOrDefaultAsync(item => item.Id == id, cancellationToken);
         if (product is null)
         {
             return NotFound();
@@ -157,6 +188,7 @@ public sealed class ProductsController(KanchimeshDbContext database) : ApiContro
         if (request.QuantityChange > 0)
         {
             product.TotalStockAdded += request.QuantityChange;
+            await ConsumeRawMaterialsAsync(product.RawMaterials, request.QuantityChange, cancellationToken);
         }
 
         // Keep a single lightweight inventory ledger for the simple
@@ -235,5 +267,24 @@ public sealed class ProductsController(KanchimeshDbContext database) : ApiContro
         }
 
         return string.Join(". ", details);
+    }
+
+    private async Task ConsumeRawMaterialsAsync(IEnumerable<ProductRawMaterial> productRawMaterials, decimal quantityIncreased, CancellationToken cancellationToken)
+    {
+        if (quantityIncreased <= 0 || productRawMaterials == null || !productRawMaterials.Any()) return;
+
+        var rawMaterialIds = productRawMaterials.Select(prm => prm.RawMaterialId).ToList();
+        var rawMaterials = await database.RawMaterials
+            .Where(rm => rawMaterialIds.Contains(rm.Id))
+            .ToListAsync(cancellationToken);
+
+        foreach (var prm in productRawMaterials)
+        {
+            var rm = rawMaterials.FirstOrDefault(r => r.Id == prm.RawMaterialId);
+            if (rm != null)
+            {
+                rm.UsedStock += (prm.ConsumptionQuantity * quantityIncreased);
+            }
+        }
     }
 }

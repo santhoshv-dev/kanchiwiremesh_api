@@ -10,7 +10,15 @@ public static class DtoMappings
         product.Rate, product.IgstRate, product.SgstRate, product.CgstRate, product.QuantityOnHand, product.TotalStockAdded, product.TotalSold, product.ReorderLevel,
         product.QuantityOnHand <= product.ReorderLevel,
         product.QuantityOnHand <= 0m,
-        product.Description, product.IsActive, product.UpdatedAtUtc);
+        product.Description, product.IsActive, product.UpdatedAtUtc,
+        product.RawMaterials?.Select(rm => rm.ToDto()).ToList());
+
+    public static RawMaterialDto ToDto(this RawMaterial rawMaterial) => new(
+        rawMaterial.Id, rawMaterial.Name, rawMaterial.TotalStock, rawMaterial.UsedStock, rawMaterial.AvailableStock,
+        rawMaterial.IsActive, rawMaterial.UpdatedAtUtc);
+
+    public static ProductRawMaterialDto ToDto(this ProductRawMaterial prm) => new(
+        prm.Id, prm.RawMaterialId, prm.RawMaterial?.Name ?? string.Empty, prm.ConsumptionQuantity);
 
     public static PurchaseRecordDto ToDto(this PurchaseRecord purchase) => new(
         purchase.Id,

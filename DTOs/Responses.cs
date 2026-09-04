@@ -67,7 +67,8 @@ public sealed record ProductDto(
     bool IsOutOfStock,
     string? Description,
     bool IsActive,
-    DateTime UpdatedAtUtc);
+    DateTime UpdatedAtUtc,
+    IReadOnlyList<ProductRawMaterialDto>? RawMaterials = null);
 
 public sealed record InventorySummaryDto(
     Guid ProductId,
@@ -316,3 +317,18 @@ public sealed record PurchaseRecordDto(
     string? Notes,
     DateTime CreatedAtUtc,
     DateTime UpdatedAtUtc);
+
+public sealed record RawMaterialDto(
+    Guid Id,
+    string Name,
+    decimal TotalStock,
+    decimal UsedStock,
+    decimal AvailableStock,
+    bool IsActive,
+    DateTime UpdatedAtUtc);
+
+public sealed record ProductRawMaterialDto(
+    Guid Id,
+    Guid RawMaterialId,
+    string RawMaterialName,
+    decimal ConsumptionQuantity);
