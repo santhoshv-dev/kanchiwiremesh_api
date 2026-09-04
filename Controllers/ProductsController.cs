@@ -163,15 +163,44 @@ public sealed class ProductsController(KanchimeshDbContext database) : ApiContro
             }
         }
 
-        try 
+        bool saved = false;
+        int retries = 0;
+        while (!saved && retries < 3)
         {
-            await database.SaveChangesAsync(cancellationToken);
-        }
-        catch (Exception ex)
-        {
-            return BadRequest(new ValidationProblemDetails(new Dictionary<string, string[]> { 
-                ["DbError"] = [ex.InnerException?.Message ?? ex.Message] 
-            }) { Title = "Database Error" });
+            try 
+            {
+                await database.SaveChangesAsync(cancellationToken);
+                saved = true;
+            }
+            catch (DbUpdateConcurrencyException ex)
+            {
+                retries++;
+                if (retries >= 3)
+                {
+                    return BadRequest(new ValidationProblemDetails(new Dictionary<string, string[]> { 
+                        ["DbError"] = ["A concurrency error could not be resolved after multiple attempts."] 
+                    }) { Title = "Database Error" });
+                }
+                
+                foreach (var entry in ex.Entries)
+                {
+                    var databaseValues = await entry.GetDatabaseValuesAsync(cancellationToken);
+                    if (databaseValues != null)
+                    {
+                        entry.OriginalValues.SetValues(databaseValues);
+                    }
+                    else
+                    {
+                        return NotFound();
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new ValidationProblemDetails(new Dictionary<string, string[]> { 
+                    ["DbError"] = [ex.InnerException?.Message ?? ex.Message] 
+                }) { Title = "Database Error" });
+            }
         }
         return Ok(product.ToDto());
     }
