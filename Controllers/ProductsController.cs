@@ -163,7 +163,16 @@ public sealed class ProductsController(KanchimeshDbContext database) : ApiContro
             }
         }
 
-        await database.SaveChangesAsync(cancellationToken);
+        try 
+        {
+            await database.SaveChangesAsync(cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(new ValidationProblemDetails(new Dictionary<string, string[]> { 
+                ["DbError"] = [ex.InnerException?.Message ?? ex.Message] 
+            }) { Title = "Database Error" });
+        }
         return Ok(product.ToDto());
     }
 
