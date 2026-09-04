@@ -111,7 +111,12 @@ public sealed class ProductsController(KanchimeshDbContext database) : ApiContro
         }
 
         await database.SaveChangesAsync(cancellationToken);
-        return CreatedAtAction(nameof(GetProduct), new { product.Id }, product.ToDto());
+        var createdProduct = await database.Products
+            .Include(p => p.RawMaterials)
+            .ThenInclude(prm => prm.RawMaterial)
+            .AsNoTracking()
+            .FirstOrDefaultAsync(p => p.Id == product.Id, cancellationToken);
+        return CreatedAtAction(nameof(GetProduct), new { product.Id }, (createdProduct ?? product).ToDto());
     }
 
     [HttpPut("{id:guid}")]
@@ -205,7 +210,12 @@ public sealed class ProductsController(KanchimeshDbContext database) : ApiContro
                 }) { Title = "Database Error" });
             }
         }
-        return Ok(product.ToDto());
+        var reloadedProduct = await database.Products
+            .Include(p => p.RawMaterials)
+            .ThenInclude(prm => prm.RawMaterial)
+            .AsNoTracking()
+            .FirstOrDefaultAsync(p => p.Id == product.Id, cancellationToken);
+        return Ok((reloadedProduct ?? product).ToDto());
     }
 
     [HttpPost("{id:guid}/adjustments")]

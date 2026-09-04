@@ -14,11 +14,11 @@ public static class DtoMappings
         product.RawMaterials?.Select(rm => rm.ToDto()).ToList());
 
     public static RawMaterialDto ToDto(this RawMaterial rawMaterial) => new(
-        rawMaterial.Id, rawMaterial.Name, rawMaterial.TotalStock, rawMaterial.UsedStock, rawMaterial.AvailableStock,
+        rawMaterial.Id, rawMaterial.Name, rawMaterial.Unit ?? "kg", rawMaterial.Specification, rawMaterial.TotalStock, rawMaterial.UsedStock, rawMaterial.AvailableStock,
         rawMaterial.IsActive, rawMaterial.UpdatedAtUtc);
 
     public static ProductRawMaterialDto ToDto(this ProductRawMaterial prm) => new(
-        prm.Id, prm.RawMaterialId, prm.RawMaterial?.Name ?? string.Empty, prm.ConsumptionQuantity);
+        prm.Id, prm.RawMaterialId, prm.RawMaterial?.Name ?? string.Empty, prm.ConsumptionQuantity, prm.RawMaterial?.Unit);
 
     public static PurchaseRecordDto ToDto(this PurchaseRecord purchase) => new(
         purchase.Id,

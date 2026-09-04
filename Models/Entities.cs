@@ -260,6 +260,8 @@ public sealed class PurchaseRecord : AuditableEntity
 public sealed class RawMaterial : AuditableEntity
 {
     public string Name { get; set; } = string.Empty;
+    public string Unit { get; set; } = "kg";
+    public string? Specification { get; set; }
     public decimal TotalStock { get; set; }
     public decimal UsedStock { get; set; }
     public decimal AvailableStock { get; set; }

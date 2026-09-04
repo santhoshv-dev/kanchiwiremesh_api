@@ -321,6 +321,8 @@ public sealed record PurchaseRecordDto(
 public sealed record RawMaterialDto(
     Guid Id,
     string Name,
+    string Unit,
+    string? Specification,
     decimal TotalStock,
     decimal UsedStock,
     decimal AvailableStock,
@@ -331,4 +333,5 @@ public sealed record ProductRawMaterialDto(
     Guid Id,
     Guid RawMaterialId,
     string RawMaterialName,
-    decimal ConsumptionQuantity);
+    decimal ConsumptionQuantity,
+    string? Unit = null);

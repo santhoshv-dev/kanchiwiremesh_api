@@ -58,6 +58,8 @@ public sealed class RawMaterialsController(KanchimeshDbContext database) : ApiCo
         var rm = new RawMaterial
         {
             Name = request.Name.Trim(),
+            Unit = string.IsNullOrWhiteSpace(request.Unit) ? "kg" : request.Unit.Trim(),
+            Specification = string.IsNullOrWhiteSpace(request.Specification) ? null : request.Specification.Trim(),
             TotalStock = request.Quantity
         };
         
@@ -78,6 +80,8 @@ public sealed class RawMaterialsController(KanchimeshDbContext database) : ApiCo
         }
 
         rm.Name = request.Name.Trim();
+        rm.Unit = string.IsNullOrWhiteSpace(request.Unit) ? "kg" : request.Unit.Trim();
+        rm.Specification = string.IsNullOrWhiteSpace(request.Specification) ? null : request.Specification.Trim();
         rm.TotalStock = request.Quantity;
 
         await database.SaveChangesAsync(cancellationToken);

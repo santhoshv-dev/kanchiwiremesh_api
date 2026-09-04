@@ -116,6 +116,8 @@ public sealed class KanchimeshDbContext(DbContextOptions<KanchimeshDbContext> op
         modelBuilder.Entity<RawMaterial>(entity =>
         {
             entity.Property(x => x.Name).HasMaxLength(180).IsRequired();
+            entity.Property(x => x.Unit).HasMaxLength(30).HasDefaultValue("kg");
+            entity.Property(x => x.Specification).HasMaxLength(300);
             entity.Property(x => x.TotalStock).HasPrecision(18, 3).HasDefaultValue(0m);
             entity.Property(x => x.UsedStock).HasPrecision(18, 3).HasDefaultValue(0m);
             entity.Property(x => x.AvailableStock).HasPrecision(18, 3).HasComputedColumnSql("[TotalStock] - [UsedStock]");
@@ -446,7 +448,7 @@ public sealed class KanchimeshDbContext(DbContextOptions<KanchimeshDbContext> op
             return;
         }
 
-        var product = await Products.FindAsync(new object[] { productId.Value }, cancellationToken);
+        var product = await Products.Include(p => p.RawMaterials).FirstOrDefaultAsync(p => p.Id == productId.Value, cancellationToken);
         if (product is null)
         {
             return;
@@ -454,6 +456,20 @@ public sealed class KanchimeshDbContext(DbContextOptions<KanchimeshDbContext> op
 
         product.QuantityOnHand += quantityOnHandDelta;
         product.TotalSold += totalSoldDelta;
+
+        if (totalSoldDelta != 0m && product.RawMaterials != null && product.RawMaterials.Count > 0)
+        {
+            var rawMaterialIds = product.RawMaterials.Select(prm => prm.RawMaterialId).ToList();
+            var rawMaterials = await RawMaterials.Where(rm => rawMaterialIds.Contains(rm.Id)).ToListAsync(cancellationToken);
+            foreach (var prm in product.RawMaterials)
+            {
+                var rm = rawMaterials.FirstOrDefault(r => r.Id == prm.RawMaterialId);
+                if (rm != null)
+                {
+                    rm.UsedStock += (prm.ConsumptionQuantity * totalSoldDelta);
+                }
+            }
+        }
     }
 
     private static bool IsCancelled(string status) =>
