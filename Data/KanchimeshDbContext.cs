@@ -467,6 +467,7 @@ public sealed class KanchimeshDbContext(DbContextOptions<KanchimeshDbContext> op
                 if (rm != null)
                 {
                     rm.UsedStock += (prm.ConsumptionQuantity * totalSoldDelta);
+                    rm.AvailableStock = rm.TotalStock - rm.UsedStock;
                 }
             }
         }
