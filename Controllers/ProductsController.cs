@@ -191,9 +191,10 @@ public sealed class ProductsController(KanchimeshDbContext database) : ApiContro
                     }
                     else
                     {
-                        return BadRequest(new ValidationProblemDetails(new Dictionary<string, string[]> { 
-                            ["DbError"] = [$"The {entry.Entity.GetType().Name} record was deleted by another user. Please refresh."] 
-                        }) { Title = "Record Not Found" });
+                        // The entity was already deleted in the database.
+                        // By detaching it, we tell EF Core to skip updating/deleting it,
+                        // effectively accepting the deletion as the winning state.
+                        entry.State = EntityState.Detached;
                     }
                 }
             }
