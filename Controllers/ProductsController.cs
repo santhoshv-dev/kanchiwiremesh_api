@@ -111,6 +111,11 @@ public sealed class ProductsController(KanchimeshDbContext database) : ApiContro
         }
 
         await database.SaveChangesAsync(cancellationToken);
+        // Reload from fresh database state. The tracked Product instance was
+        // originally loaded before its raw-material navigation was changed,
+        // and relationship fix-up can otherwise leave the response with an
+        // empty/stale RawMaterials collection even though the row was saved.
+        database.ChangeTracker.Clear();
         var createdProduct = await database.Products
             .Include(p => p.RawMaterials)
             .ThenInclude(prm => prm.RawMaterial)
@@ -160,8 +165,13 @@ public sealed class ProductsController(KanchimeshDbContext database) : ApiContro
             }
             else
             {
-                product.RawMaterials.Add(new ProductRawMaterial
+                // Add through the DbSet and set the FK explicitly. Relying on
+                // collection relationship discovery here left new requirements
+                // untracked in this update path, so SaveChanges persisted only
+                // the Product changes.
+                database.ProductRawMaterials.Add(new ProductRawMaterial
                 {
+                    ProductId = product.Id,
                     RawMaterialId = incomingRm.RawMaterialId,
                     ConsumptionQuantity = incomingRm.ConsumptionQuantity
                 });
@@ -210,6 +220,9 @@ public sealed class ProductsController(KanchimeshDbContext database) : ApiContro
                 }) { Title = "Database Error" });
             }
         }
+        // Avoid returning the stale navigation collection held by the Product
+        // instance loaded at the start of this request.
+        database.ChangeTracker.Clear();
         var reloadedProduct = await database.Products
             .Include(p => p.RawMaterials)
             .ThenInclude(prm => prm.RawMaterial)

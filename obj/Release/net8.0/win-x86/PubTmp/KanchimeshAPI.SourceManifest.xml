@@ -1,4 +1,4 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <sitemanifest>
-  <IisApp path="E:\ERH\kanchimeshapi\obj\Release\net8.0\win-x86\PubTmp\Out\" />
+  <IisApp path="E:\ERH\kanchimeshapi\bin\Release\net8.0\win-x86\publish\" />
 </sitemanifest>
