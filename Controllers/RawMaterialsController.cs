@@ -82,9 +82,23 @@ public sealed class RawMaterialsController(KanchimeshDbContext database) : ApiCo
         rm.Name = request.Name.Trim();
         rm.Unit = string.IsNullOrWhiteSpace(request.Unit) ? "kg" : request.Unit.Trim();
         rm.Specification = string.IsNullOrWhiteSpace(request.Specification) ? null : request.Specification.Trim();
-        rm.TotalStock = request.Quantity;
+        // An unchanged Stock field must not replace a newer balance.
+        var stock = request.OriginalQuantity == request.Quantity ? rm.TotalStock : request.Quantity;
+        var updatedStock = stock + request.AddStock;
+        if (request.AddStock < 0 || updatedStock > 999999999999999m || request.AddStock % 0.001m != 0)
+        {
+            return ValidationError(nameof(request.AddStock), "Enter a non-negative stock quantity with at most 3 decimal places within the supported range.");
+        }
+        rm.TotalStock = updatedStock;
 
-        await database.SaveChangesAsync(cancellationToken);
+        try
+        {
+            await database.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            return Conflict("Stock changed while saving. Refresh and submit again.");
+        }
         return Ok(rm.ToDto());
     }
 

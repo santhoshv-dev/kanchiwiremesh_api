@@ -886,6 +886,7 @@ namespace KanchimeshAPI.Migrations
                         .HasColumnType("nvarchar(300)");
 
                     b.Property<decimal>("TotalStock")
+                        .IsConcurrencyToken()
                         .ValueGeneratedOnAdd()
                         .HasPrecision(18, 3)
                         .HasColumnType("decimal(18,3)")

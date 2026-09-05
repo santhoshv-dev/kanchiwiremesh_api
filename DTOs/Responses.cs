@@ -68,7 +68,8 @@ public sealed record ProductDto(
     string? Description,
     bool IsActive,
     DateTime UpdatedAtUtc,
-    IReadOnlyList<ProductRawMaterialDto>? RawMaterials = null);
+    IReadOnlyList<ProductRawMaterialDto>? RawMaterials = null,
+    decimal Pieces = 0m, decimal TotalAmount = 0m);
 
 public sealed record InventorySummaryDto(
     Guid ProductId,

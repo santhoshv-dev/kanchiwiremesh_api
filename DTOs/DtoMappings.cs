@@ -11,7 +11,16 @@ public static class DtoMappings
         product.QuantityOnHand <= product.ReorderLevel,
         product.QuantityOnHand <= 0m,
         product.Description, product.IsActive, product.UpdatedAtUtc,
-        product.RawMaterials?.Select(rm => rm.ToDto()).ToList());
+        product.RawMaterials?.Select(rm => rm.ToDto()).ToList(),
+        AvailablePieces(product), AvailablePieces(product) * product.Rate);
+
+    private static decimal AvailablePieces(Product product) =>
+        product.RawMaterials is { Count: > 0 }
+            ? product.RawMaterials.Min(requirement =>
+                requirement.RawMaterial is null || requirement.ConsumptionQuantity <= 0m ? 0m :
+                decimal.Floor(Math.Max(0m, requirement.RawMaterial.TotalStock - requirement.RawMaterial.UsedStock)
+                    / requirement.ConsumptionQuantity))
+            : product.QuantityOnHand;
 
     public static RawMaterialDto ToDto(this RawMaterial rawMaterial) => new(
         rawMaterial.Id, rawMaterial.Name, rawMaterial.Unit ?? "kg", rawMaterial.Specification, rawMaterial.TotalStock, rawMaterial.UsedStock, rawMaterial.AvailableStock,

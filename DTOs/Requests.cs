@@ -234,6 +234,8 @@ public sealed class PurchaseRecordRequest
 
 public sealed class RawMaterialRequest
 {
+    [Range(typeof(decimal), "0", "999999999999999")] public decimal AddStock { get; init; }
+    public decimal? OriginalQuantity { get; init; }
     [Required, StringLength(180)] public string Name { get; init; } = string.Empty;
     [StringLength(30)] public string Unit { get; init; } = "kg";
     [StringLength(300)] public string? Specification { get; init; }

@@ -249,7 +249,7 @@ public sealed class ProductsController(KanchimeshDbContext database) : ApiContro
             return ValidationError(nameof(request.QuantityChange), "Stock quantity must have at most 3 decimal places and be within the supported range.");
         }
 
-        var product = await database.Products.Include(p => p.RawMaterials).SingleOrDefaultAsync(item => item.Id == id, cancellationToken);
+        var product = await database.Products.Include(p => p.RawMaterials).ThenInclude(prm => prm.RawMaterial).SingleOrDefaultAsync(item => item.Id == id, cancellationToken);
         if (product is null)
         {
             return NotFound();

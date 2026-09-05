@@ -118,7 +118,7 @@ public sealed class KanchimeshDbContext(DbContextOptions<KanchimeshDbContext> op
             entity.Property(x => x.Name).HasMaxLength(180).IsRequired();
             entity.Property(x => x.Unit).HasMaxLength(30).HasDefaultValue("kg");
             entity.Property(x => x.Specification).HasMaxLength(300);
-            entity.Property(x => x.TotalStock).HasPrecision(18, 3).HasDefaultValue(0m);
+            entity.Property(x => x.TotalStock).HasPrecision(18, 3).HasDefaultValue(0m).IsConcurrencyToken();
             entity.Property(x => x.UsedStock).HasPrecision(18, 3).HasDefaultValue(0m);
             entity.Property(x => x.AvailableStock).HasPrecision(18, 3).HasComputedColumnSql("[TotalStock] - [UsedStock]");
             entity.Property(x => x.IsActive).HasDefaultValue(true);
