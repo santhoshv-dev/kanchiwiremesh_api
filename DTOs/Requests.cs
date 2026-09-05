@@ -69,8 +69,8 @@ public sealed class ProductRequest
     [StringLength(100)] public string? MeshType { get; init; }
     [StringLength(100)] public string? MeshOpening { get; init; }
     [StringLength(100)] public string? WireDiameter { get; init; }
-    [Range(typeof(decimal), "0.001", "999999999999999")] public decimal? Width { get; init; }
-    [Range(typeof(decimal), "0.001", "999999999999999")] public decimal? Length { get; init; }
+    [Range(typeof(decimal), "0", "999999999999999")] public decimal? Width { get; init; }
+    [Range(typeof(decimal), "0", "999999999999999")] public decimal? Length { get; init; }
     [Required, StringLength(30)] public string Unit { get; init; } = "pcs";
     [Range(typeof(decimal), "0", "999999999999999")] public decimal Rate { get; init; }
     [Range(typeof(decimal), "0", "100")] public decimal IgstRate { get; init; } [Range(typeof(decimal), "0", "100")] public decimal SgstRate { get; init; } [Range(typeof(decimal), "0", "100")] public decimal CgstRate { get; init; }

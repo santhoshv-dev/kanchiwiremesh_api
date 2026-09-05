@@ -1,3 +1,5 @@
+using System.ComponentModel.DataAnnotations;
+using System.Globalization;
 using KanchimeshAPI.Controllers;
 using KanchimeshAPI.Data;
 using KanchimeshAPI.DTOs;
@@ -9,6 +11,59 @@ namespace KanchimeshAPI.Tests;
 
 public sealed class ProductsControllerTests
 {
+    [Theory]
+    [InlineData(null, true)]
+    [InlineData("0", true)]
+    [InlineData("0.001", true)]
+    [InlineData("230", true)]
+    [InlineData("999999999999999", true)]
+    [InlineData("-0.001", false)]
+    [InlineData("1000000000000000", false)]
+    public void ProductRequest_ValidatesDimensionBounds(string? value, bool expectedValid)
+    {
+        decimal? dimension = value is null ? null : decimal.Parse(value, CultureInfo.InvariantCulture);
+        foreach (var propertyName in new[] { nameof(ProductRequest.Width), nameof(ProductRequest.Length) })
+        {
+            var context = new ValidationContext(new ProductRequest()) { MemberName = propertyName };
+            var results = new List<ValidationResult>();
+
+            Assert.Equal(expectedValid, Validator.TryValidateProperty(dimension, context, results));
+        }
+    }
+
+    [Fact]
+    public async Task CreateAndUpdateProduct_AcceptsZeroLength()
+    {
+        await using var database = CreateDatabase();
+        var controller = new ProductsController(database);
+        var request = new ProductRequest
+        {
+            Name = "230 mm Carry Roller",
+            Category = "Carry Roller",
+            HsnSac = "73114",
+            Width = 230m,
+            Length = 0m,
+            Rate = 100m,
+            Unit = "PCS",
+            Description = "2",
+            RawMaterials = [],
+        };
+        var validationResults = new List<ValidationResult>();
+        Assert.True(Validator.TryValidateObject(request, new ValidationContext(request), validationResults, true));
+
+        var createdResponse = await controller.CreateProduct(request, CancellationToken.None);
+        var created = Assert.IsType<ProductDto>(Assert.IsType<CreatedAtActionResult>(createdResponse.Result).Value);
+        Assert.Equal(0m, created.Length);
+        Assert.Equal(230m, created.Width);
+
+        var updatedResponse = await controller.UpdateProduct(created.Id, request, CancellationToken.None);
+        var updated = Assert.IsType<ProductDto>(Assert.IsType<OkObjectResult>(updatedResponse.Result).Value);
+        Assert.Equal(0m, updated.Length);
+        var persisted = await database.Products.AsNoTracking().SingleAsync();
+        Assert.Equal(0m, persisted.Length);
+        Assert.Equal(230m, persisted.Width);
+    }
+
     [Fact]
     public async Task UpdateProduct_AddsAndReturnsANewRawMaterialRequirement()
     {
