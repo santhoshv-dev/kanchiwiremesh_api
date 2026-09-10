@@ -71,6 +71,13 @@ public sealed record ProductDto(
     IReadOnlyList<ProductRawMaterialDto>? RawMaterials = null,
     decimal Pieces = 0m, decimal TotalAmount = 0m);
 
+public sealed record ProductCategorySummaryDto(
+    string Category,
+    decimal TotalAmount,
+    decimal TotalPieces,
+    int ProductCount,
+    IReadOnlyList<ProductDto> Products);
+
 public sealed record InventorySummaryDto(
     Guid ProductId,
     string ProductCode,
@@ -239,7 +246,10 @@ public sealed record DashboardSummaryDto(
     decimal Outstanding,
     decimal AdvanceBalance,
     IReadOnlyList<OrderSummaryDto> RecentOrders,
-    IReadOnlyList<decimal> SalesBars);
+    IReadOnlyList<decimal> SalesBars,
+    decimal MonthlySales = 0m,
+    decimal MonthlyReceived = 0m,
+    decimal TotalProductsAmount = 0m);
 
 public sealed record PaymentSummaryDto(
     decimal TotalSales,

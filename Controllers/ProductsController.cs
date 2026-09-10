@@ -366,4 +366,31 @@ public sealed class ProductsController(KanchimeshDbContext database) : ApiContro
             }
         }
     }
+
+    [HttpGet("category-summary")]
+    [ProducesResponseType(typeof(IReadOnlyList<ProductCategorySummaryDto>), StatusCodes.Status200OK)]
+    public async Task<ActionResult<IReadOnlyList<ProductCategorySummaryDto>>> GetCategorySummary(CancellationToken cancellationToken)
+    {
+        var products = await database.Products.AsNoTracking()
+            .Where(product => product.IsActive)
+            .Include(product => product.RawMaterials)
+            .ThenInclude(prm => prm.RawMaterial)
+            .OrderBy(product => product.Category)
+            .ThenBy(product => product.Name)
+            .ToListAsync(cancellationToken);
+
+        var productDtos = products.Select(p => p.ToDto()).ToList();
+        var grouped = productDtos
+            .GroupBy(p => string.IsNullOrWhiteSpace(p.Category) ? "Uncategorized" : p.Category.Trim(), StringComparer.OrdinalIgnoreCase)
+            .Select(g => new ProductCategorySummaryDto(
+                g.Key,
+                g.Sum(p => p.TotalAmount),
+                g.Sum(p => p.Pieces),
+                g.Count(),
+                g.ToList()))
+            .OrderByDescending(c => c.TotalAmount)
+            .ToList();
+
+        return Ok(grouped);
+    }
 }

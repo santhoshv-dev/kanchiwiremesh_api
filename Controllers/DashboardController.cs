@@ -75,6 +75,21 @@ public sealed class DashboardController(KanchimeshDbContext database) : ApiContr
                 (payment.SalesOrderId == null || payment.SalesOrder!.Status != "Cancelled"))
             .SumAsync(payment => (decimal?)payment.Amount, cancellationToken) ?? 0m;
 
+        var startOfCurrentMonth = new DateOnly(currentMonth.Year, currentMonth.Month, 1);
+        var startOfNextMonth = startOfCurrentMonth.AddMonths(1);
+        var currentMonthSales = monthlySalesByMonth.GetValueOrDefault(startOfCurrentMonth, 0m);
+        var monthlyReceived = await database.Payments
+            .Where(payment => (payment.SalesOrderId == null || payment.SalesOrder!.Status != "Cancelled") &&
+                payment.PaymentDate >= startOfCurrentMonth && payment.PaymentDate < startOfNextMonth)
+            .SumAsync(payment => (decimal?)payment.Amount, cancellationToken) ?? 0m;
+
+        var activeProducts = await database.Products.AsNoTracking()
+            .Where(product => product.IsActive)
+            .Include(product => product.RawMaterials)
+            .ThenInclude(prm => prm.RawMaterial)
+            .ToListAsync(cancellationToken);
+        var totalProductsAmount = activeProducts.Sum(product => product.ToDto().TotalAmount);
+
         return Ok(new DashboardSummaryDto(
             customerCount,
             activeProductCount,
@@ -87,7 +102,10 @@ public sealed class DashboardController(KanchimeshDbContext database) : ApiContr
             Math.Max(totalSales - totalReceived, 0m),
             advanceBalance,
             recentOrders.Select(ToSummaryDto).ToList(),
-            salesBars));
+            salesBars,
+            currentMonthSales,
+            monthlyReceived,
+            totalProductsAmount));
     }
 
     private static OrderSummaryDto ToSummaryDto(SalesOrder order)
