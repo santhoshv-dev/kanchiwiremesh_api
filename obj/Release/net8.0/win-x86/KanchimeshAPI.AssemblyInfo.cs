@@ -15,7 +15,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("KanchimeshAPI")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Release")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+e65735d56773c2f8d07ce60b9181454985644f9f")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+69564b8c4e5e262710966dfbdd66d062ef366886")]
 [assembly: System.Reflection.AssemblyProductAttribute("KanchimeshAPI")]
 [assembly: System.Reflection.AssemblyTitleAttribute("KanchimeshAPI")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

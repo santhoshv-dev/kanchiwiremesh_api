@@ -12,6 +12,24 @@ namespace KanchimeshAPI.Tests;
 public sealed class ProductsControllerTests
 {
     [Theory]
+    [InlineData("1970x1550x26x8")]
+    [InlineData("1970 × 1550 × 26 × 8")]
+    [InlineData("1970  X  1550 x 26 x 8")]
+    public async Task Search_NormalizesDimensionsBeforePagination(string search)
+    {
+        await using var database = CreateDatabase();
+        for (var i = 0; i < 55; i++)
+        {
+            database.Products.Add(new Product { ProductCode = $"P{i}", Name = $"000 Product {i}", Category = "Mesh", Unit = "PCS" });
+        }
+        database.Products.Add(new Product { ProductCode = "TARGET", Name = "1970 x 1550 x 26 x 8 mm", Category = "Mesh", Unit = "PCS" });
+        await database.SaveChangesAsync();
+        var response = await new ProductsController(database).GetProducts(search, null);
+        var page = Assert.IsType<PagedResult<ProductDto>>(Assert.IsType<OkObjectResult>(response.Result).Value);
+        Assert.Equal("TARGET", Assert.Single(page.Items).ProductCode);
+    }
+
+    [Theory]
     [InlineData(null, true)]
     [InlineData("0", true)]
     [InlineData("0.001", true)]

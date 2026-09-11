@@ -34,12 +34,17 @@ public sealed class ProductsController(KanchimeshDbContext database) : ApiContro
 
         if (!string.IsNullOrWhiteSpace(search))
         {
-            var term = search.Trim().ToLower();
+            // Normalize size separators and spacing on both sides, while keeping
+            // filtering in SQL so pagination covers the entire catalog.
+            var term = search.Trim().ToLower().Replace("×", "x").Replace(" ", "").Replace("\t", "").Replace("\r", "").Replace("\n", "");
             query = query.Where(product =>
-                product.Name.ToLower().Contains(term) ||
-                product.ProductCode.ToLower().Contains(term) ||
-                product.Category.ToLower().Contains(term) ||
-                (product.MeshOpening ?? string.Empty).ToLower().Contains(term));
+                product.Name.ToLower().Replace("×", "x").Replace(" ", "").Replace("\t", "").Replace("\r", "").Replace("\n", "").Contains(term) ||
+                product.ProductCode.ToLower().Replace("×", "x").Replace(" ", "").Replace("\t", "").Replace("\r", "").Replace("\n", "").Contains(term) ||
+                product.Category.ToLower().Replace("×", "x").Replace(" ", "").Replace("\t", "").Replace("\r", "").Replace("\n", "").Contains(term) ||
+                (product.MeshOpening ?? string.Empty).ToLower().Replace("×", "x").Replace(" ", "").Replace("\t", "").Replace("\r", "").Replace("\n", "").Contains(term) ||
+                (product.Description ?? string.Empty).ToLower().Replace("×", "x").Replace(" ", "").Replace("\t", "").Replace("\r", "").Replace("\n", "").Contains(term) ||
+                (product.MeshType ?? string.Empty).ToLower().Replace("×", "x").Replace(" ", "").Replace("\t", "").Replace("\r", "").Replace("\n", "").Contains(term) ||
+                (product.WireDiameter ?? string.Empty).ToLower().Replace("×", "x").Replace(" ", "").Replace("\t", "").Replace("\r", "").Replace("\n", "").Contains(term));
         }
 
         var totalCount = await query.CountAsync(cancellationToken);

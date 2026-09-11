@@ -376,13 +376,16 @@ public sealed class KanchimeshDbContext(DbContextOptions<KanchimeshDbContext> op
         {
             var item = entry.Entity;
             Guid? productId = entry.State == EntityState.Deleted
-                ? entry.OriginalValues["ProductId"] is Guid originalProductId ? originalProductId : null
-                : item.ProductId;
+                ? (entry.OriginalValues["ProductId"] is Guid originalProductId ? originalProductId : (item.ProductId ?? item.Product?.Id))
+                : (item.ProductId ?? item.Product?.Id);
             var quantity = entry.State == EntityState.Deleted ? (decimal)entry.OriginalValues["Quantity"]! : item.Quantity;
 
-            var orderId = entry.State == EntityState.Deleted ? (Guid)entry.OriginalValues["SalesOrderId"]! : item.SalesOrderId;
+            var orderId = entry.State == EntityState.Deleted
+                ? (entry.OriginalValues["SalesOrderId"] is Guid originalOrderId ? originalOrderId : (item.SalesOrderId != Guid.Empty ? item.SalesOrderId : item.SalesOrder?.Id ?? Guid.Empty))
+                : (item.SalesOrderId != Guid.Empty ? item.SalesOrderId : item.SalesOrder?.Id ?? Guid.Empty);
 
-            var orderEntry = ChangeTracker.Entries<SalesOrder>().FirstOrDefault(e => e.Entity.Id == orderId);
+            var orderEntry = ChangeTracker.Entries<SalesOrder>()
+                .FirstOrDefault(e => (orderId != Guid.Empty && e.Entity.Id == orderId) || (item.SalesOrder != null && e.Entity == item.SalesOrder));
             string orderStatus = "Pending";
 
             if (orderEntry != null)
@@ -448,7 +451,9 @@ public sealed class KanchimeshDbContext(DbContextOptions<KanchimeshDbContext> op
             return;
         }
 
-        var product = await Products.FirstOrDefaultAsync(p => p.Id == productId.Value, cancellationToken);
+        var product = ChangeTracker.Entries<Product>()
+            .FirstOrDefault(p => p.Entity.Id == productId.Value)?.Entity
+            ?? await Products.FirstOrDefaultAsync(p => p.Id == productId.Value, cancellationToken);
         if (product is null)
         {
             return;
