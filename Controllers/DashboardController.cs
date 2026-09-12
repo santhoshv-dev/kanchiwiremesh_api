@@ -9,6 +9,52 @@ namespace KanchimeshAPI.Controllers;
 [Route("api/dashboard")]
 public sealed class DashboardController(KanchimeshDbContext database) : ApiControllerBase
 {
+    [HttpGet("monthly-sales")]
+    [ProducesResponseType(typeof(MonthlySalesBreakdownDto), StatusCodes.Status200OK)]
+    public async Task<ActionResult<MonthlySalesBreakdownDto>> GetMonthlySales(
+        CancellationToken cancellationToken)
+    {
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var month = new DateOnly(today.Year, today.Month, 1);
+        var nextMonth = month.AddMonths(1);
+        var orders = await database.SalesOrders.AsNoTracking()
+            .Where(order => order.Status != "Cancelled" &&
+                order.OrderDate >= month && order.OrderDate < nextMonth)
+            .Include(order => order.Customer)
+            .Include(order => order.Items)
+            .OrderByDescending(order => order.OrderDate)
+            .ThenByDescending(order => order.CreatedAtUtc)
+            .ToListAsync(cancellationToken);
+
+        var items = orders.Select(order => new MonthlySalesOrderDto(
+            order.Id,
+            order.OrderNumber,
+            order.CustomerId,
+            DtoMappings.DisplayCustomerName(order.Customer),
+            order.Items.OrderBy(item => item.Id).Select(item => item.Description).FirstOrDefault() ?? "—",
+            order.OrderDate,
+            order.Status,
+            order.GstType,
+            order.TaxAmount,
+            order.GrandTotal)).ToList();
+        var gstOrders = items
+            .Where(order => !string.Equals(order.GstType, "None", StringComparison.OrdinalIgnoreCase))
+            .ToList();
+        var nonGstOrders = items
+            .Where(order => string.Equals(order.GstType, "None", StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+        return Ok(new MonthlySalesBreakdownDto(
+            month,
+            items.Sum(order => order.GrandTotal),
+            gstOrders.Sum(order => order.GrandTotal),
+            nonGstOrders.Sum(order => order.GrandTotal),
+            gstOrders.Sum(order => order.TaxAmount),
+            gstOrders.Count,
+            nonGstOrders.Count,
+            items));
+    }
+
     [HttpGet]
     [ProducesResponseType(typeof(DashboardSummaryDto), StatusCodes.Status200OK)]
     public async Task<ActionResult<DashboardSummaryDto>> GetDashboard(CancellationToken cancellationToken)

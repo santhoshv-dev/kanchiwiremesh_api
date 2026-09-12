@@ -110,6 +110,75 @@ public sealed class DashboardControllerTests
     }
 
     [Fact]
+    public async Task GetMonthlySales_SplitsGstAndNonGstOrders()
+    {
+        await using var database = CreateDatabase();
+        var customer = new Customer
+        {
+            CustomerCode = "CUS-SALES-SPLIT",
+            ContactName = "Sales Split Customer",
+            Phone = "9876543210",
+        };
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var currentMonth = new DateOnly(today.Year, today.Month, 1);
+        database.SalesOrders.AddRange(
+            new SalesOrder
+            {
+                OrderNumber = "GST-CURRENT",
+                Customer = customer,
+                Status = "Completed",
+                OrderDate = currentMonth,
+                GstType = "IGST",
+                TaxAmount = 180m,
+                GrandTotal = 1_180m,
+            },
+            new SalesOrder
+            {
+                OrderNumber = "NON-GST-CURRENT",
+                Customer = customer,
+                Status = "New",
+                OrderDate = currentMonth,
+                GstType = "None",
+                GrandTotal = 500m,
+            },
+            new SalesOrder
+            {
+                OrderNumber = "CANCELLED-CURRENT",
+                Customer = customer,
+                Status = "Cancelled",
+                OrderDate = currentMonth,
+                GstType = "IGST",
+                TaxAmount = 90m,
+                GrandTotal = 590m,
+            },
+            new SalesOrder
+            {
+                OrderNumber = "GST-PREVIOUS",
+                Customer = customer,
+                Status = "Completed",
+                OrderDate = currentMonth.AddMonths(-1),
+                GstType = "IGST",
+                TaxAmount = 36m,
+                GrandTotal = 236m,
+            });
+        await database.SaveChangesAsync();
+
+        var response = await new DashboardController(database)
+            .GetMonthlySales(CancellationToken.None);
+
+        var result = Assert.IsType<OkObjectResult>(response.Result);
+        var breakdown = Assert.IsType<MonthlySalesBreakdownDto>(result.Value);
+        Assert.Equal(currentMonth, breakdown.Month);
+        Assert.Equal(1_680m, breakdown.TotalSales);
+        Assert.Equal(1_180m, breakdown.GstSales);
+        Assert.Equal(500m, breakdown.NonGstSales);
+        Assert.Equal(180m, breakdown.GstCollected);
+        Assert.Equal(1, breakdown.GstOrderCount);
+        Assert.Equal(1, breakdown.NonGstOrderCount);
+        Assert.Equal(2, breakdown.Orders.Count);
+    }
+
+    [Fact]
     public async Task ProductsController_GetCategorySummary_GroupsByCategory()
     {
         await using var database = CreateDatabase();

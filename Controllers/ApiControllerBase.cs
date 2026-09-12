@@ -13,7 +13,7 @@ public abstract class ApiControllerBase : ControllerBase
         });
 
     protected static (int Page, int PageSize) NormalizePage(int page, int pageSize) =>
-        (Math.Clamp(page, 1, 100000), Math.Clamp(pageSize, 1, 100));
+        (Math.Clamp(page, 1, 100000), Math.Clamp(pageSize, 1, 1000));
 
     protected static string? NullIfWhiteSpace(string? value) =>
         string.IsNullOrWhiteSpace(value) ? null : value.Trim();

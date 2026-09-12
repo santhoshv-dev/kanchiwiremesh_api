@@ -163,6 +163,28 @@ public sealed record OrderSummaryDto(
     decimal Outstanding,
     DateTime UpdatedAtUtc);
 
+public sealed record MonthlySalesOrderDto(
+    Guid Id,
+    string OrderNumber,
+    Guid CustomerId,
+    string CustomerName,
+    string ProductName,
+    DateOnly OrderDate,
+    string Status,
+    string GstType,
+    decimal TaxAmount,
+    decimal GrandTotal);
+
+public sealed record MonthlySalesBreakdownDto(
+    DateOnly Month,
+    decimal TotalSales,
+    decimal GstSales,
+    decimal NonGstSales,
+    decimal GstCollected,
+    int GstOrderCount,
+    int NonGstOrderCount,
+    IReadOnlyList<MonthlySalesOrderDto> Orders);
+
 public sealed record OrderDetailDto(
     Guid Id,
     string OrderNumber,
