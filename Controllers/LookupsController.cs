@@ -16,6 +16,8 @@ public sealed class LookupsController : ApiControllerBase
         {
             "Crusher Mesh", "Vibrating Screen Mesh", "Mining Mesh", "Woven Wire Mesh", "Roller", "Custom Mesh"
         },
-        meshTypes = new[] { "Square", "Rectangular", "Diamond", "Hexagonal", "Custom" }
+        meshTypes = new[] { "Square", "Rectangular", "Diamond", "Hexagonal", "Custom" },
+        expenseCategories = WorkflowValues.ExpenseCategories,
+        purchasePaymentStatuses = WorkflowValues.PurchasePaymentStatuses
     });
 }

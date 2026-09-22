@@ -225,12 +225,42 @@ public sealed class PurchaseRecordRequest
     [StringLength(180)] public string? SupplierName { get; init; }
     public DateOnly? PurchaseDate { get; init; }
     public decimal? QuantityPurchased { get; init; }
+    public decimal? UnitPrice { get; init; }
     public decimal? PurchaseAmount { get; init; }
     public decimal? GstAmount { get; init; }
     public decimal? GstRate { get; init; }
     [StringLength(30)] public string? PaymentStatus { get; init; } = "Pending";
     [StringLength(2000)] public string? Notes { get; init; }
+
+    // Optional initial payment details
+    public decimal? InitialPaidAmount { get; init; }
+    [StringLength(30)] public string? PaymentMode { get; init; }
+    [StringLength(150)] public string? PaymentReference { get; init; }
+    [StringLength(2000)] public string? PaymentNotes { get; init; }
 }
+
+public sealed class RecordPurchasePaymentRequest
+{
+    [Range(typeof(decimal), "0.01", "999999999999999")] public decimal Amount { get; init; }
+    public DateOnly PaymentDate { get; init; } = DateOnly.FromDateTime(DateTime.UtcNow);
+    [Required, StringLength(30)] public string PaymentMode { get; init; } = "Cash";
+    [StringLength(150)] public string? ReferenceNumber { get; init; }
+    [StringLength(2000)] public string? Notes { get; init; }
+}
+
+public sealed class ExpenseRequest
+{
+    [Required] public DateOnly ExpenseDate { get; init; } = DateOnly.FromDateTime(DateTime.UtcNow);
+    [Required, StringLength(100)] public string Category { get; init; } = string.Empty;
+    [Required, StringLength(500)] public string Description { get; init; } = string.Empty;
+    [Range(typeof(decimal), "0.01", "999999999999999")] public decimal Amount { get; init; }
+    [Required, StringLength(30)] public string PaymentMode { get; init; } = "Cash";
+    [StringLength(180)] public string? PaidTo { get; init; }
+    [StringLength(150)] public string? ReferenceNumber { get; init; }
+    [StringLength(2000)] public string? Notes { get; init; }
+    [StringLength(500)] public string? AttachmentUrl { get; init; }
+}
+
 
 public sealed class RawMaterialRequest
 {

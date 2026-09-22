@@ -523,11 +523,8 @@ E:\ERH\kanchimeshapi\bin\Debug\net8.0\publish\publish\KanchimeshAPI.runtimeconfi
 E:\ERH\kanchimeshapi\bin\Debug\net8.0\publish\publish\KanchimeshAPI.Tests.deps.json
 E:\ERH\kanchimeshapi\bin\Debug\net8.0\publish\publish\KanchimeshAPI.Tests.runtimeconfig.json
 E:\ERH\kanchimeshapi\bin\Debug\net8.0\publish\publish\MvcTestingAppManifest.json
-e:\ERH\kanchimeshapi\bin\Debug\net8.0\KanchimeshAPI.staticwebassets.endpoints.json
-e:\ERH\kanchimeshapi\obj\Debug\net8.0\rpswa.dswa.cache.json
-e:\ERH\kanchimeshapi\obj\Debug\net8.0\rjimswa.dswa.cache.json
-e:\ERH\kanchimeshapi\obj\Debug\net8.0\rjsmrazor.dswa.cache.json
-e:\ERH\kanchimeshapi\obj\Debug\net8.0\rjsmcshtml.dswa.cache.json
-e:\ERH\kanchimeshapi\obj\Debug\net8.0\staticwebassets.build.json.cache
-e:\ERH\kanchimeshapi\obj\Debug\net8.0\staticwebassets.build.endpoints.json
-e:\ERH\kanchimeshapi\obj\Debug\net8.0\swae.build.ex.cache
+E:\ERH\kanchimeshapi\obj\Debug\net8.0\staticwebassets\msbuild.KanchimeshAPI.Microsoft.AspNetCore.StaticWebAssets.props
+E:\ERH\kanchimeshapi\obj\Debug\net8.0\staticwebassets\msbuild.build.KanchimeshAPI.props
+E:\ERH\kanchimeshapi\obj\Debug\net8.0\staticwebassets\msbuild.buildMultiTargeting.KanchimeshAPI.props
+E:\ERH\kanchimeshapi\obj\Debug\net8.0\staticwebassets\msbuild.buildTransitive.KanchimeshAPI.props
+E:\ERH\kanchimeshapi\obj\Debug\net8.0\staticwebassets.pack.json

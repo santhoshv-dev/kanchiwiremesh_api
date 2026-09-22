@@ -271,7 +271,9 @@ public sealed record DashboardSummaryDto(
     IReadOnlyList<decimal> SalesBars,
     decimal MonthlySales = 0m,
     decimal MonthlyReceived = 0m,
-    decimal TotalProductsAmount = 0m);
+    decimal TotalProductsAmount = 0m,
+    decimal TotalExpenses = 0m,
+    decimal MonthlyExpenses = 0m);
 
 public sealed record PaymentSummaryDto(
     decimal TotalSales,
@@ -331,6 +333,17 @@ public sealed record ProductTransactionsSummaryDto(
     decimal TotalPurchasesAmount,
     int TransactionCount);
 
+public sealed record PurchasePaymentDto(
+    Guid Id,
+    string PaymentNumber,
+    Guid PurchaseRecordId,
+    decimal Amount,
+    DateOnly PaymentDate,
+    string PaymentMode,
+    string? ReferenceNumber,
+    string? Notes,
+    DateTime CreatedAtUtc);
+
 public sealed record PurchaseRecordDto(
     Guid Id,
     string PurchaseNumber,
@@ -343,13 +356,63 @@ public sealed record PurchaseRecordDto(
     string? SupplierName,
     DateOnly PurchaseDate,
     decimal QuantityPurchased,
+    decimal? UnitPrice,
     decimal PurchaseAmount,
     decimal? GstAmount,
     decimal? GstRate,
+    decimal TotalPaid,
+    decimal PendingAmount,
     string PaymentStatus,
     string? Notes,
+    IReadOnlyList<PurchasePaymentDto> Payments,
     DateTime CreatedAtUtc,
     DateTime UpdatedAtUtc);
+
+public sealed record ExpenseDto(
+    Guid Id,
+    string ExpenseNumber,
+    DateOnly ExpenseDate,
+    string Category,
+    string Description,
+    decimal Amount,
+    string PaymentMode,
+    string? PaidTo,
+    string? ReferenceNumber,
+    string? Notes,
+    string? AttachmentUrl,
+    DateTime CreatedAtUtc,
+    DateTime UpdatedAtUtc);
+
+public sealed record TransactionSummaryDto(
+    decimal TotalIncoming,
+    decimal TotalOutgoing,
+    decimal TotalGeneralExpenses,
+    decimal TotalSupplierPayments,
+    decimal NetBalance,
+    DateOnly? FromDate = null,
+    DateOnly? ToDate = null);
+
+public sealed record TransactionReportDto(
+    DateOnly? FromDate,
+    DateOnly? ToDate,
+    decimal TotalIncoming,
+    decimal TotalOutgoing,
+    decimal NetBalance,
+    int TotalCount,
+    IReadOnlyList<TransactionItemDto> Items);
+
+public sealed record TransactionItemDto(
+    Guid Id,
+    DateOnly Date,
+    string TransactionType,
+    string Category,
+    string Description,
+    string? PartyName,
+    decimal IncomingAmount,
+    decimal OutgoingAmount,
+    string PaymentMode,
+    string? ReferenceNumber,
+    decimal RunningBalance);
 
 public sealed record RawMaterialDto(
     Guid Id,

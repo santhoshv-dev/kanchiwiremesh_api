@@ -250,11 +250,40 @@ public sealed class PurchaseRecord : AuditableEntity
 
     public DateOnly PurchaseDate { get; set; }
     public decimal QuantityPurchased { get; set; }
+    public decimal? UnitPrice { get; set; }
     public decimal PurchaseAmount { get; set; }
     public decimal? GstAmount { get; set; }
     public decimal? GstRate { get; set; }
     public string PaymentStatus { get; set; } = "Pending";
     public string? Notes { get; set; }
+
+    public ICollection<PurchasePayment> Payments { get; set; } = new List<PurchasePayment>();
+}
+
+public sealed class PurchasePayment : AuditableEntity
+{
+    public string PaymentNumber { get; set; } = string.Empty;
+    public Guid PurchaseRecordId { get; set; }
+    public PurchaseRecord PurchaseRecord { get; set; } = null!;
+    public decimal Amount { get; set; }
+    public DateOnly PaymentDate { get; set; } = DateOnly.FromDateTime(DateTime.UtcNow);
+    public string PaymentMode { get; set; } = "Cash";
+    public string? ReferenceNumber { get; set; }
+    public string? Notes { get; set; }
+}
+
+public sealed class Expense : AuditableEntity
+{
+    public string ExpenseNumber { get; set; } = string.Empty;
+    public DateOnly ExpenseDate { get; set; } = DateOnly.FromDateTime(DateTime.UtcNow);
+    public string Category { get; set; } = string.Empty;
+    public string Description { get; set; } = string.Empty;
+    public decimal Amount { get; set; }
+    public string PaymentMode { get; set; } = "Cash";
+    public string? PaidTo { get; set; }
+    public string? ReferenceNumber { get; set; }
+    public string? Notes { get; set; }
+    public string? AttachmentUrl { get; set; }
 }
 
 public sealed class RawMaterial : AuditableEntity
@@ -279,3 +308,4 @@ public sealed class ProductRawMaterial
     public RawMaterial RawMaterial { get; set; } = null!;
     public decimal ConsumptionQuantity { get; set; }
 }
+

@@ -136,6 +136,22 @@ public sealed class DashboardController(KanchimeshDbContext database) : ApiContr
             .ToListAsync(cancellationToken);
         var totalProductsAmount = activeProducts.Sum(product => product.ToDto().TotalAmount);
 
+        var totalGeneralExpenses = await database.Expenses
+            .SumAsync(expense => (decimal?)expense.Amount, cancellationToken) ?? 0m;
+        var totalSupplierPayments = await database.PurchasePayments
+            .SumAsync(payment => (decimal?)payment.Amount, cancellationToken) ?? 0m;
+        var totalExpenses = totalGeneralExpenses + totalSupplierPayments;
+
+        var monthlyGeneralExpenses = await database.Expenses
+            .Where(expense => expense.ExpenseDate >= startOfCurrentMonth && expense.ExpenseDate < startOfNextMonth)
+            .SumAsync(expense => (decimal?)expense.Amount, cancellationToken) ?? 0m;
+        var monthlySupplierPayments = await database.PurchasePayments
+            .Where(payment => payment.PaymentDate >= startOfCurrentMonth && payment.PaymentDate < startOfNextMonth)
+            .SumAsync(payment => (decimal?)payment.Amount, cancellationToken) ?? 0m;
+        var monthlyExpenses = monthlyGeneralExpenses + monthlySupplierPayments;
+        var netTotalReceived = totalReceived - totalExpenses;
+        var netMonthlyReceived = monthlyReceived - monthlyExpenses;
+
         return Ok(new DashboardSummaryDto(
             customerCount,
             activeProductCount,
@@ -143,15 +159,17 @@ public sealed class DashboardController(KanchimeshDbContext database) : ApiContr
             pendingOrderCount,
             completedOrderCount,
             totalSales,
-            totalReceived,
-            totalReceived,
+            netTotalReceived,
+            netTotalReceived,
             Math.Max(totalSales - totalReceived, 0m),
             advanceBalance,
             recentOrders.Select(ToSummaryDto).ToList(),
             salesBars,
             currentMonthSales,
-            monthlyReceived,
-            totalProductsAmount));
+            netMonthlyReceived,
+            totalProductsAmount,
+            totalExpenses,
+            monthlyExpenses));
     }
 
     private static OrderSummaryDto ToSummaryDto(SalesOrder order)

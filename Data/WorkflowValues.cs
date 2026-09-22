@@ -9,10 +9,13 @@ public static class WorkflowValues
         ["Pending", "Completed", "Cancelled"];
 
     public static readonly IReadOnlyList<string> PaymentMethods =
-        ["Cash", "UPI", "Bank Transfer", "Cheque", "Credit"];
+        ["Cash", "UPI", "Bank Transfer", "Card", "Cheque", "Credit"];
 
     public static readonly IReadOnlyList<string> PurchasePaymentStatuses =
-        ["Paid", "Pending", "Partial", "Unpaid", "Not Applicable"];
+        ["Unpaid", "Partially Paid", "Fully Paid", "Paid", "Pending", "Partial", "Not Applicable"];
+
+    public static readonly IReadOnlyList<string> ExpenseCategories =
+        ["Rent", "Electricity & Utilities", "Salaries & Wages", "Office Supplies", "Logistics & Transport", "Machinery & Repairs", "Tea & Refreshments", "Miscellaneous"];
 
     public static bool TryNormalize(string? input, IReadOnlyList<string> options, out string value)
     {
