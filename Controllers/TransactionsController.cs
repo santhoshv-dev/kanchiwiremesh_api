@@ -203,15 +203,16 @@ public sealed class TransactionsController(KanchimeshDbContext database) : ApiCo
         }
 
         var resultList = filtered.ToList();
-        var totalIn = resultList.Sum(x => x.IncomingAmount);
-        var totalOut = resultList.Sum(x => x.OutgoingAmount);
+        var periodTotalIncoming = customerPayments.Sum(p => p.Amount);
+        var periodTotalOutgoing = expenses.Sum(e => e.Amount) + purchasePayments.Sum(sp => sp.Amount);
+        var periodNetBalance = periodTotalIncoming - periodTotalOutgoing;
 
         return Ok(new TransactionReportDto(
             fromDate,
             toDate,
-            totalIn,
-            totalOut,
-            totalIn - totalOut,
+            periodTotalIncoming,
+            periodTotalOutgoing,
+            periodNetBalance,
             resultList.Count,
             resultList));
     }
