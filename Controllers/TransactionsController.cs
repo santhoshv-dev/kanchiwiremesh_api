@@ -105,7 +105,9 @@ public sealed class TransactionsController(KanchimeshDbContext database) : ApiCo
                 0m,
                 p.Method,
                 p.Reference,
-                0m);
+                0m,
+                "Incoming",
+                p.PaymentNumber);
             rawList.Add((p.PaymentDate, p.CreatedAtUtc, item));
         }
 
@@ -122,7 +124,9 @@ public sealed class TransactionsController(KanchimeshDbContext database) : ApiCo
                 e.Amount,
                 e.PaymentMode,
                 e.ReferenceNumber,
-                0m);
+                0m,
+                "Outgoing",
+                e.ExpenseNumber);
             rawList.Add((e.ExpenseDate, e.CreatedAtUtc, item));
         }
 
@@ -141,7 +145,9 @@ public sealed class TransactionsController(KanchimeshDbContext database) : ApiCo
                 sp.Amount,
                 sp.PaymentMode,
                 sp.ReferenceNumber,
-                0m);
+                0m,
+                "Outgoing",
+                sp.PaymentNumber);
             rawList.Add((sp.PaymentDate, sp.CreatedAtUtc, item));
         }
 
@@ -192,6 +198,7 @@ public sealed class TransactionsController(KanchimeshDbContext database) : ApiCo
                 x.Category.ToLower().Contains(term) ||
                 (x.PartyName != null && x.PartyName.ToLower().Contains(term)) ||
                 (x.ReferenceNumber != null && x.ReferenceNumber.ToLower().Contains(term)) ||
+                (x.TransactionNumber != null && x.TransactionNumber.ToLower().Contains(term)) ||
                 x.PaymentMode.ToLower().Contains(term));
         }
 

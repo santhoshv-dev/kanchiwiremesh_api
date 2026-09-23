@@ -231,8 +231,16 @@ public sealed class ExpensesAndTransactionsTests
         // Item 2 (Sep 21): -15,000  -> Running = 85,000
         // Item 3 (Sep 22): -20,000  -> Running = 65,000
         Assert.Equal(100000m, report.Items[0].RunningBalance);
+        Assert.Equal("Incoming", report.Items[0].Type);
+        Assert.Equal("PAY-001", report.Items[0].TransactionNumber);
+
         Assert.Equal(85000m, report.Items[1].RunningBalance);
+        Assert.Equal("Outgoing", report.Items[1].Type);
+        Assert.Equal("EXP-001", report.Items[1].TransactionNumber);
+
         Assert.Equal(65000m, report.Items[2].RunningBalance);
+        Assert.Equal("Outgoing", report.Items[2].Type);
+        Assert.Equal("PPAY-001", report.Items[2].TransactionNumber);
     }
 
     private static KanchimeshDbContext CreateDatabase()

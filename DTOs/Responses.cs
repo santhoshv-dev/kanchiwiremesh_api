@@ -412,7 +412,9 @@ public sealed record TransactionItemDto(
     decimal OutgoingAmount,
     string PaymentMode,
     string? ReferenceNumber,
-    decimal RunningBalance);
+    decimal RunningBalance,
+    string Type = "Incoming",
+    string? TransactionNumber = null);
 
 public sealed record RawMaterialDto(
     Guid Id,
