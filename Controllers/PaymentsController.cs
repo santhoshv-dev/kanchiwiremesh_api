@@ -16,8 +16,12 @@ public sealed class PaymentsController(KanchimeshDbContext database) : ApiContro
         [FromQuery] Guid? customerId,
         [FromQuery] Guid? orderId,
         [FromQuery] bool? isAdvance,
+        [FromQuery] string? search,
+        [FromQuery] string? method,
+        [FromQuery] DateOnly? fromDate,
+        [FromQuery] DateOnly? toDate,
         [FromQuery] int page = 1,
-        [FromQuery] int pageSize = 20,
+        [FromQuery] int pageSize = 50,
         CancellationToken cancellationToken = default)
     {
         (page, pageSize) = NormalizePage(page, pageSize);
@@ -38,6 +42,33 @@ public sealed class PaymentsController(KanchimeshDbContext database) : ApiContro
         if (isAdvance.HasValue)
         {
             query = query.Where(payment => payment.IsAdvance == isAdvance.Value);
+        }
+
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var term = search.Trim().ToLower();
+            query = query.Where(payment =>
+                payment.PaymentNumber.ToLower().Contains(term) ||
+                (payment.Reference != null && payment.Reference.ToLower().Contains(term)) ||
+                (payment.Notes != null && payment.Notes.ToLower().Contains(term)) ||
+                (payment.Customer.CompanyName != null && payment.Customer.CompanyName.ToLower().Contains(term)) ||
+                payment.Customer.ContactName.ToLower().Contains(term));
+        }
+
+        if (!string.IsNullOrWhiteSpace(method) && !string.Equals(method, "All", StringComparison.OrdinalIgnoreCase))
+        {
+            var m = method.Trim().ToLower();
+            query = query.Where(payment => payment.Method.ToLower() == m);
+        }
+
+        if (fromDate.HasValue)
+        {
+            query = query.Where(payment => payment.PaymentDate >= fromDate.Value);
+        }
+
+        if (toDate.HasValue)
+        {
+            query = query.Where(payment => payment.PaymentDate <= toDate.Value);
         }
 
         var totalCount = await query.CountAsync(cancellationToken);
