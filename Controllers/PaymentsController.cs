@@ -383,10 +383,19 @@ public sealed class PaymentsController(KanchimeshDbContext database) : ApiContro
             throw new PaymentValidationException(relationError.Value.Field, relationError.Value.Message);
         }
 
+        var nextPayNumber = await database.Payments.CountAsync(cancellationToken) + 1;
+        string paymentNumber;
+        do
+        {
+            paymentNumber = $"PAY-{nextPayNumber}";
+            nextPayNumber++;
+        }
+        while (await database.Payments.AnyAsync(p => p.PaymentNumber == paymentNumber, cancellationToken));
+
         var payment = new Payment
         {
             Id = paymentId,
-            PaymentNumber = DocumentNumbers.New("PAY"),
+            PaymentNumber = paymentNumber,
         };
         Apply(payment, request, method);
         database.Payments.Add(payment);
