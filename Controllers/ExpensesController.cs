@@ -105,9 +105,18 @@ public sealed class ExpensesController(KanchimeshDbContext database) : ApiContro
             return ValidationError(validationError.Value.Field, validationError.Value.Message);
         }
 
+        var nextNumber = await database.Expenses.CountAsync(cancellationToken) + 1;
+        string expenseNumber;
+        do
+        {
+            expenseNumber = $"EXP-{nextNumber}";
+            nextNumber++;
+        }
+        while (await database.Expenses.AnyAsync(e => e.ExpenseNumber == expenseNumber, cancellationToken));
+
         var expense = new Expense
         {
-            ExpenseNumber = DocumentNumbers.New("EXP"),
+            ExpenseNumber = expenseNumber,
         };
         Apply(expense, request);
         database.Expenses.Add(expense);
