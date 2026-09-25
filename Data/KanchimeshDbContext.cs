@@ -338,6 +338,62 @@ public sealed class KanchimeshDbContext(DbContextOptions<KanchimeshDbContext> op
             entity.Property(x => x.Notes).HasMaxLength(2000);
             entity.Property(x => x.AttachmentUrl).HasMaxLength(500);
         });
+
+        modelBuilder.Entity<Quotation>(entity =>
+        {
+            entity.HasIndex(x => x.QuotationNumber).IsUnique();
+            entity.HasIndex(x => x.QuotationDate);
+            entity.HasIndex(x => x.Status);
+            entity.Property(x => x.QuotationNumber).HasMaxLength(48).IsRequired();
+            entity.Property(x => x.CustomerName).HasMaxLength(180).IsRequired();
+            entity.Property(x => x.CustomerPhone).HasMaxLength(25);
+            entity.Property(x => x.CustomerEmail).HasMaxLength(254);
+            entity.Property(x => x.CustomerAddress).HasMaxLength(500);
+            entity.Property(x => x.CustomerGstNumber).HasMaxLength(32);
+            entity.Property(x => x.QuotationDate).HasColumnType("date");
+            entity.Property(x => x.ValidUntilDate).HasColumnType("date");
+            entity.Property(x => x.Status).HasMaxLength(30).IsRequired();
+            entity.Property(x => x.GstType).HasMaxLength(20).IsRequired();
+            entity.Property(x => x.Subtotal).HasPrecision(18, 2);
+            entity.Property(x => x.DiscountAmount).HasPrecision(18, 2);
+            entity.Property(x => x.FreightAmount).HasPrecision(18, 2);
+            entity.Property(x => x.TaxAmount).HasPrecision(18, 2);
+            entity.Property(x => x.GrandTotal).HasPrecision(18, 2);
+            entity.Property(x => x.Notes).HasMaxLength(2000);
+            entity.Property(x => x.TermsAndConditions).HasMaxLength(4000);
+            entity.HasOne(x => x.Customer)
+                .WithMany()
+                .HasForeignKey(x => x.CustomerId)
+                .OnDelete(DeleteBehavior.SetNull);
+            entity.HasOne(x => x.ConvertedSalesOrder)
+                .WithMany()
+                .HasForeignKey(x => x.ConvertedSalesOrderId)
+                .OnDelete(DeleteBehavior.SetNull);
+            entity.HasMany(x => x.Items)
+                .WithOne(x => x.Quotation)
+                .HasForeignKey(x => x.QuotationId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<QuotationItem>(entity =>
+        {
+            entity.Property(x => x.Description).HasMaxLength(250).IsRequired();
+            entity.Property(x => x.HsnSac).HasMaxLength(20);
+            entity.Property(x => x.Specification).HasMaxLength(200);
+            entity.Property(x => x.Unit).HasMaxLength(20).IsRequired();
+            entity.Property(x => x.Quantity).HasPrecision(18, 3);
+            entity.Property(x => x.Rate).HasPrecision(18, 2);
+            entity.Property(x => x.IgstRate).HasPrecision(5, 2);
+            entity.Property(x => x.SgstRate).HasPrecision(5, 2);
+            entity.Property(x => x.CgstRate).HasPrecision(5, 2);
+            entity.Property(x => x.LineSubtotal).HasPrecision(18, 2);
+            entity.Property(x => x.TaxAmount).HasPrecision(18, 2);
+            entity.Property(x => x.LineTotal).HasPrecision(18, 2);
+            entity.HasOne(x => x.Product)
+                .WithMany()
+                .HasForeignKey(x => x.ProductId)
+                .OnDelete(DeleteBehavior.SetNull);
+        });
     }
 
     public override async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)

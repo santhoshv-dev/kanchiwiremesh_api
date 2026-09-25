@@ -8,6 +8,9 @@ public static class WorkflowValues
     public static readonly IReadOnlyList<string> OrderStatuses =
         ["Pending", "Completed", "Cancelled"];
 
+    public static readonly IReadOnlyList<string> QuotationStatuses =
+        ["Draft", "Sent", "Accepted", "Declined", "Converted", "Expired"];
+
     public static readonly IReadOnlyList<string> PaymentMethods =
         ["Cash", "UPI", "Bank Transfer", "Card", "Cheque", "Credit"];
 

@@ -756,7 +756,7 @@ public sealed class OrdersController(KanchimeshDbContext database) : ApiControll
         Detail = "Reverse or reassign the payments before cancelling the order."
     });
 
-    private static OrderSummaryDto ToSummaryDto(SalesOrder order)
+    public static OrderSummaryDto ToSummaryDto(SalesOrder order)
     {
         var paid = order.Payments.Where(payment => !payment.IsAdvance).Sum(payment => payment.Amount);
         return new OrderSummaryDto(
@@ -766,7 +766,7 @@ public sealed class OrdersController(KanchimeshDbContext database) : ApiControll
             paid, Math.Max(order.GrandTotal - paid, 0m), order.UpdatedAtUtc);
     }
 
-    private static OrderDetailDto ToDetailDto(SalesOrder order, CompanyProfileDto? company = null)
+    public static OrderDetailDto ToDetailDto(SalesOrder order, CompanyProfileDto? company = null)
     {
         var summary = ToSummaryDto(order);
         return new OrderDetailDto(
