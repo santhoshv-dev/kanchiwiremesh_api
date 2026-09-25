@@ -309,3 +309,57 @@ public sealed class ProductRawMaterial
     public decimal ConsumptionQuantity { get; set; }
 }
 
+public sealed class Quotation : AuditableEntity
+{
+    public string QuotationNumber { get; set; } = string.Empty;
+    public Guid? CustomerId { get; set; }
+    public Customer? Customer { get; set; }
+
+    public string CustomerName { get; set; } = string.Empty;
+    public string? CustomerPhone { get; set; }
+    public string? CustomerEmail { get; set; }
+    public string? CustomerAddress { get; set; }
+    public string? CustomerGstNumber { get; set; }
+
+    public DateOnly QuotationDate { get; set; } = DateOnly.FromDateTime(DateTime.UtcNow);
+    public DateOnly? ValidUntilDate { get; set; }
+    public string Status { get; set; } = "Draft";
+    public string? Notes { get; set; }
+    public string? TermsAndConditions { get; set; }
+
+    public decimal Subtotal { get; set; }
+    public decimal DiscountAmount { get; set; }
+    public decimal FreightAmount { get; set; }
+    public decimal TaxAmount { get; set; }
+    public string GstType { get; set; } = "IGST";
+    public decimal GrandTotal { get; set; }
+
+    public Guid? ConvertedSalesOrderId { get; set; }
+    public SalesOrder? ConvertedSalesOrder { get; set; }
+
+    public ICollection<QuotationItem> Items { get; set; } = new List<QuotationItem>();
+}
+
+public sealed class QuotationItem
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid QuotationId { get; set; }
+    public Quotation Quotation { get; set; } = null!;
+
+    public Guid? ProductId { get; set; }
+    public Product? Product { get; set; }
+
+    public string Description { get; set; } = string.Empty;
+    public string? HsnSac { get; set; }
+    public string? Specification { get; set; }
+    public decimal Quantity { get; set; }
+    public string Unit { get; set; } = "pcs";
+    public decimal Rate { get; set; }
+    public decimal IgstRate { get; set; }
+    public decimal SgstRate { get; set; }
+    public decimal CgstRate { get; set; }
+    public decimal LineSubtotal { get; set; }
+    public decimal TaxAmount { get; set; }
+    public decimal LineTotal { get; set; }
+}
+

@@ -22,6 +22,8 @@ public sealed class KanchimeshDbContext(DbContextOptions<KanchimeshDbContext> op
     public DbSet<PurchaseRecord> PurchaseRecords => Set<PurchaseRecord>();
     public DbSet<PurchasePayment> PurchasePayments => Set<PurchasePayment>();
     public DbSet<Expense> Expenses => Set<Expense>();
+    public DbSet<Quotation> Quotations => Set<Quotation>();
+    public DbSet<QuotationItem> QuotationItems => Set<QuotationItem>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -42,6 +44,7 @@ public sealed class KanchimeshDbContext(DbContextOptions<KanchimeshDbContext> op
         ConfigureAuditEntity<PurchaseRecord>(modelBuilder.Entity<PurchaseRecord>());
         ConfigureAuditEntity<PurchasePayment>(modelBuilder.Entity<PurchasePayment>());
         ConfigureAuditEntity<Expense>(modelBuilder.Entity<Expense>());
+        ConfigureAuditEntity<Quotation>(modelBuilder.Entity<Quotation>());
 
         modelBuilder.Entity<ApplicationUser>(entity =>
         {
