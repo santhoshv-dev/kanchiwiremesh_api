@@ -12,14 +12,39 @@ public sealed class DashboardController(KanchimeshDbContext database) : ApiContr
     [HttpGet("monthly-sales")]
     [ProducesResponseType(typeof(MonthlySalesBreakdownDto), StatusCodes.Status200OK)]
     public async Task<ActionResult<MonthlySalesBreakdownDto>> GetMonthlySales(
+        [FromQuery] int? year,
+        [FromQuery] int? month,
+        [FromQuery] DateOnly? fromDate,
+        [FromQuery] DateOnly? toDate,
         CancellationToken cancellationToken)
     {
-        var today = DateOnly.FromDateTime(DateTime.UtcNow);
-        var month = new DateOnly(today.Year, today.Month, 1);
-        var nextMonth = month.AddMonths(1);
+        DateOnly startDate;
+        DateOnly endDate;
+        if (fromDate.HasValue && toDate.HasValue)
+        {
+            startDate = fromDate.Value;
+            endDate = toDate.Value.AddDays(1);
+        }
+        else if (year.HasValue && !month.HasValue)
+        {
+            startDate = new DateOnly(year.Value, 1, 1);
+            endDate = new DateOnly(year.Value + 1, 1, 1);
+        }
+        else if (year.HasValue && month.HasValue)
+        {
+            startDate = new DateOnly(year.Value, month.Value, 1);
+            endDate = startDate.AddMonths(1);
+        }
+        else
+        {
+            var today = DateOnly.FromDateTime(DateTime.UtcNow);
+            startDate = new DateOnly(today.Year, today.Month, 1);
+            endDate = startDate.AddMonths(1);
+        }
+
         var orders = await database.SalesOrders.AsNoTracking()
             .Where(order => order.Status != "Cancelled" &&
-                order.OrderDate >= month && order.OrderDate < nextMonth)
+                order.OrderDate >= startDate && order.OrderDate < endDate)
             .Include(order => order.Customer)
             .Include(order => order.Items)
             .OrderByDescending(order => order.OrderDate)
@@ -45,7 +70,7 @@ public sealed class DashboardController(KanchimeshDbContext database) : ApiContr
             .ToList();
 
         return Ok(new MonthlySalesBreakdownDto(
-            month,
+            startDate,
             items.Sum(order => order.GrandTotal),
             gstOrders.Sum(order => order.GrandTotal),
             nonGstOrders.Sum(order => order.GrandTotal),
@@ -54,6 +79,7 @@ public sealed class DashboardController(KanchimeshDbContext database) : ApiContr
             nonGstOrders.Count,
             items));
     }
+
 
     [HttpGet]
     [ProducesResponseType(typeof(DashboardSummaryDto), StatusCodes.Status200OK)]

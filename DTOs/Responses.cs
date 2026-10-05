@@ -78,6 +78,26 @@ public sealed record ProductCategorySummaryDto(
     int ProductCount,
     IReadOnlyList<ProductDto> Products);
 
+public sealed record ProductSalesItemDto(
+    Guid? ProductId,
+    string ProductCode,
+    string ProductName,
+    string Category,
+    decimal TotalQuantity,
+    string Unit,
+    decimal TotalAmount,
+    int OrderCount,
+    decimal AverageRate);
+
+public sealed record ProductSalesSummaryDto(
+    DateOnly StartDate,
+    DateOnly EndDate,
+    decimal TotalAmount,
+    decimal TotalQuantity,
+    int TotalOrders,
+    int TotalProducts,
+    IReadOnlyList<ProductSalesItemDto> Products);
+
 public sealed record InventorySummaryDto(
     Guid ProductId,
     string ProductCode,

@@ -398,4 +398,96 @@ public sealed class ProductsController(KanchimeshDbContext database) : ApiContro
 
         return Ok(grouped);
     }
+
+    [HttpGet("sales-summary")]
+    [ProducesResponseType(typeof(ProductSalesSummaryDto), StatusCodes.Status200OK)]
+    public async Task<ActionResult<ProductSalesSummaryDto>> GetProductSalesSummary(
+        [FromQuery] int? year,
+        [FromQuery] int? month,
+        [FromQuery] DateOnly? fromDate,
+        [FromQuery] DateOnly? toDate,
+        [FromQuery] string? category,
+        CancellationToken cancellationToken = default)
+    {
+        DateOnly startDate;
+        DateOnly endDate;
+        if (fromDate.HasValue && toDate.HasValue)
+        {
+            startDate = fromDate.Value;
+            endDate = toDate.Value.AddDays(1);
+        }
+        else if (year.HasValue && !month.HasValue)
+        {
+            startDate = new DateOnly(year.Value, 1, 1);
+            endDate = new DateOnly(year.Value + 1, 1, 1);
+        }
+        else if (year.HasValue && month.HasValue)
+        {
+            startDate = new DateOnly(year.Value, month.Value, 1);
+            endDate = startDate.AddMonths(1);
+        }
+        else
+        {
+            var today = DateOnly.FromDateTime(DateTime.UtcNow);
+            startDate = new DateOnly(today.Year, today.Month, 1);
+            endDate = startDate.AddMonths(1);
+        }
+
+        var ordersQuery = database.SalesOrders.AsNoTracking()
+            .Where(order => order.Status != "Cancelled" &&
+                order.OrderDate >= startDate && order.OrderDate < endDate);
+
+        var rawItems = await ordersQuery
+            .SelectMany(order => order.Items.Select(item => new
+            {
+                order.OrderNumber,
+                order.OrderDate,
+                item.ProductId,
+                ProductCode = item.Product != null ? item.Product.ProductCode : "",
+                ProductName = item.Product != null ? item.Product.Name : item.Description,
+                Category = item.Product != null ? item.Product.Category : "General",
+                item.Quantity,
+                item.Unit,
+                item.Rate,
+                item.LineTotal
+            }))
+            .ToListAsync(cancellationToken);
+
+        if (!string.IsNullOrWhiteSpace(category) && !category.Equals("All", StringComparison.OrdinalIgnoreCase))
+        {
+            var cat = category.Trim().ToLower();
+            rawItems = rawItems.Where(i => i.Category.ToLower() == cat).ToList();
+        }
+
+        var grouped = rawItems
+            .GroupBy(i => new { i.ProductId, Name = string.IsNullOrWhiteSpace(i.ProductName) ? "Unnamed Product" : i.ProductName.Trim(), Unit = string.IsNullOrWhiteSpace(i.Unit) ? "pcs" : i.Unit.Trim() })
+            .Select(g =>
+            {
+                var totalQty = g.Sum(x => x.Quantity);
+                var totalAmt = g.Sum(x => x.LineTotal);
+                return new ProductSalesItemDto(
+                    g.Key.ProductId,
+                    g.Select(x => x.ProductCode).FirstOrDefault(c => !string.IsNullOrEmpty(c)) ?? "",
+                    g.Key.Name,
+                    g.Select(x => x.Category).FirstOrDefault(c => !string.IsNullOrEmpty(c)) ?? "General",
+                    totalQty,
+                    g.Key.Unit,
+                    totalAmt,
+                    g.Select(x => x.OrderNumber).Distinct().Count(),
+                    totalQty > 0 ? Math.Round(totalAmt / totalQty, 2) : 0m);
+            })
+            .OrderByDescending(x => x.TotalAmount)
+            .ToList();
+
+        var summary = new ProductSalesSummaryDto(
+            startDate,
+            endDate.AddDays(-1),
+            grouped.Sum(x => x.TotalAmount),
+            grouped.Sum(x => x.TotalQuantity),
+            rawItems.Select(x => x.OrderNumber).Distinct().Count(),
+            grouped.Count,
+            grouped);
+
+        return Ok(summary);
+    }
 }
