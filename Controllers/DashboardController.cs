@@ -178,6 +178,14 @@ public sealed class DashboardController(KanchimeshDbContext database) : ApiContr
         var netTotalReceived = totalReceived - totalExpenses;
         var netMonthlyReceived = monthlyReceived - monthlyExpenses;
 
+        // Borrowing ledger lives outside the payments tables, so the card on the
+        // dashboard is derived from Borrows/BorrowRepayments only.
+        var totalBorrowed = await database.Borrows
+            .SumAsync(borrow => (decimal?)borrow.Amount, cancellationToken) ?? 0m;
+        var totalBorrowRepaid = await database.BorrowRepayments
+            .SumAsync(repayment => (decimal?)repayment.Amount, cancellationToken) ?? 0m;
+        var outstandingBorrow = Math.Max(totalBorrowed - totalBorrowRepaid, 0m);
+
         return Ok(new DashboardSummaryDto(
             customerCount,
             activeProductCount,
@@ -195,7 +203,9 @@ public sealed class DashboardController(KanchimeshDbContext database) : ApiContr
             netMonthlyReceived,
             totalProductsAmount,
             totalExpenses,
-            monthlyExpenses));
+            monthlyExpenses,
+            totalBorrowed,
+            outstandingBorrow));
     }
 
     private static OrderSummaryDto ToSummaryDto(SalesOrder order)

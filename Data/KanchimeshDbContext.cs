@@ -22,6 +22,8 @@ public sealed class KanchimeshDbContext(DbContextOptions<KanchimeshDbContext> op
     public DbSet<PurchaseRecord> PurchaseRecords => Set<PurchaseRecord>();
     public DbSet<PurchasePayment> PurchasePayments => Set<PurchasePayment>();
     public DbSet<Expense> Expenses => Set<Expense>();
+    public DbSet<Borrow> Borrows => Set<Borrow>();
+    public DbSet<BorrowRepayment> BorrowRepayments => Set<BorrowRepayment>();
     public DbSet<Quotation> Quotations => Set<Quotation>();
     public DbSet<QuotationItem> QuotationItems => Set<QuotationItem>();
 
@@ -44,6 +46,8 @@ public sealed class KanchimeshDbContext(DbContextOptions<KanchimeshDbContext> op
         ConfigureAuditEntity<PurchaseRecord>(modelBuilder.Entity<PurchaseRecord>());
         ConfigureAuditEntity<PurchasePayment>(modelBuilder.Entity<PurchasePayment>());
         ConfigureAuditEntity<Expense>(modelBuilder.Entity<Expense>());
+        ConfigureAuditEntity<Borrow>(modelBuilder.Entity<Borrow>());
+        ConfigureAuditEntity<BorrowRepayment>(modelBuilder.Entity<BorrowRepayment>());
         ConfigureAuditEntity<Quotation>(modelBuilder.Entity<Quotation>());
 
         modelBuilder.Entity<ApplicationUser>(entity =>
@@ -337,6 +341,37 @@ public sealed class KanchimeshDbContext(DbContextOptions<KanchimeshDbContext> op
             entity.Property(x => x.ReferenceNumber).HasMaxLength(150);
             entity.Property(x => x.Notes).HasMaxLength(2000);
             entity.Property(x => x.AttachmentUrl).HasMaxLength(500);
+        });
+
+        modelBuilder.Entity<Borrow>(entity =>
+        {
+            entity.HasIndex(x => x.BorrowNumber).IsUnique();
+            entity.HasIndex(x => x.BorrowDate);
+            entity.HasIndex(x => x.BorrowerName);
+            entity.Property(x => x.BorrowNumber).HasMaxLength(48).IsRequired();
+            entity.Property(x => x.BorrowerName).HasMaxLength(180).IsRequired();
+            entity.Property(x => x.BorrowDate).HasColumnType("date");
+            entity.Property(x => x.Amount).HasPrecision(18, 2);
+            entity.Property(x => x.PaymentMode).HasMaxLength(50).IsRequired();
+            entity.Property(x => x.ReferenceNumber).HasMaxLength(150);
+            entity.Property(x => x.Notes).HasMaxLength(2000);
+            entity.HasMany(x => x.Repayments)
+                .WithOne(x => x.Borrow)
+                .HasForeignKey(x => x.BorrowId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<BorrowRepayment>(entity =>
+        {
+            entity.HasIndex(x => x.RepaymentNumber).IsUnique();
+            entity.HasIndex(x => x.BorrowId);
+            entity.HasIndex(x => x.PaymentDate);
+            entity.Property(x => x.RepaymentNumber).HasMaxLength(48).IsRequired();
+            entity.Property(x => x.Amount).HasPrecision(18, 2);
+            entity.Property(x => x.PaymentDate).HasColumnType("date");
+            entity.Property(x => x.PaymentMode).HasMaxLength(50).IsRequired();
+            entity.Property(x => x.ReferenceNumber).HasMaxLength(150);
+            entity.Property(x => x.Notes).HasMaxLength(2000);
         });
 
         modelBuilder.Entity<Quotation>(entity =>

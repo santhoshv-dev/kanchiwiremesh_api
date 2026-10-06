@@ -115,6 +115,43 @@ public static class DtoMappings
         expense.CreatedAtUtc,
         expense.UpdatedAtUtc);
 
+    public static BorrowRepaymentDto ToDto(this BorrowRepayment repayment) => new(
+        repayment.Id,
+        repayment.RepaymentNumber,
+        repayment.BorrowId,
+        repayment.Amount,
+        repayment.PaymentDate,
+        repayment.PaymentMode,
+        repayment.ReferenceNumber,
+        repayment.Notes,
+        repayment.CreatedAtUtc);
+
+    public static BorrowDto ToDto(this Borrow borrow)
+    {
+        var repayments = (borrow.Repayments ?? [])
+            .OrderBy(repayment => repayment.PaymentDate)
+            .ThenBy(repayment => repayment.CreatedAtUtc)
+            .Select(repayment => repayment.ToDto())
+            .ToList();
+        var totalRepaid = repayments.Sum(repayment => repayment.Amount);
+        var outstanding = Math.Max(borrow.Amount - totalRepaid, 0m);
+        return new BorrowDto(
+            borrow.Id,
+            borrow.BorrowNumber,
+            borrow.BorrowerName,
+            borrow.BorrowDate,
+            borrow.Amount,
+            borrow.PaymentMode,
+            borrow.ReferenceNumber,
+            borrow.Notes,
+            totalRepaid,
+            outstanding,
+            outstanding <= 0m ? "Repaid" : "Pending",
+            repayments,
+            borrow.CreatedAtUtc,
+            borrow.UpdatedAtUtc);
+    }
+
     public static EnquiryDto ToDto(this Enquiry enquiry) => new(
         enquiry.Id, enquiry.EnquiryNumber, enquiry.CustomerId,
         enquiry.Customer is null ? null : DisplayCustomerName(enquiry.Customer), enquiry.ContactName,

@@ -286,6 +286,40 @@ public sealed class Expense : AuditableEntity
     public string? AttachmentUrl { get; set; }
 }
 
+/// <summary>
+/// Money the business has borrowed from a person or lender. This is a separate
+/// flow from <see cref="Payment"/> (customer receipts) so the borrowing ledger
+/// never interferes with the existing payments APIs.
+/// </summary>
+public sealed class Borrow : AuditableEntity
+{
+    public string BorrowNumber { get; set; } = string.Empty;
+    /// <summary>Name of the person or party the money was borrowed from, entered manually.</summary>
+    public string BorrowerName { get; set; } = string.Empty;
+    public DateOnly BorrowDate { get; set; } = DateOnly.FromDateTime(DateTime.UtcNow);
+    public decimal Amount { get; set; }
+    /// <summary>Payment method used when the money was received, entered manually.</summary>
+    public string PaymentMode { get; set; } = "Cash";
+    public string? ReferenceNumber { get; set; }
+    public string? Notes { get; set; }
+
+    public ICollection<BorrowRepayment> Repayments { get; set; } = new List<BorrowRepayment>();
+}
+
+/// <summary>One repayment made against a <see cref="Borrow"/>.</summary>
+public sealed class BorrowRepayment : AuditableEntity
+{
+    public string RepaymentNumber { get; set; } = string.Empty;
+    public Guid BorrowId { get; set; }
+    public Borrow Borrow { get; set; } = null!;
+    public decimal Amount { get; set; }
+    public DateOnly PaymentDate { get; set; } = DateOnly.FromDateTime(DateTime.UtcNow);
+    /// <summary>Payment method used for the repayment, entered manually.</summary>
+    public string PaymentMode { get; set; } = "Cash";
+    public string? ReferenceNumber { get; set; }
+    public string? Notes { get; set; }
+}
+
 public sealed class RawMaterial : AuditableEntity
 {
     public string Name { get; set; } = string.Empty;

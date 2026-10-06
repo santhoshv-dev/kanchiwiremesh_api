@@ -220,6 +220,24 @@ The dashboard returns live aggregate values, recent orders, and a twelve-month
 numeric sales trend. List APIs are paginated and business resources require the
 administrator bearer token.
 
+## Borrows (separate from payments)
+
+Borrowings are their own ledger so the existing payments APIs are untouched.
+Every entry is a manual record: name, date, amount, and payment method are typed
+in by the client rather than derived from a customer or order.
+
+- `GET /api/borrows?search=&status=&fromDate=&toDate=&page=&pageSize=`
+- `GET /api/borrows/summary`
+- `GET /api/borrows/{id}`
+- `POST /api/borrows` and `PUT /api/borrows/{id}` accept `BorrowRequest`
+- `DELETE /api/borrows/{id}` removes the borrowing and its repayments
+- `POST /api/borrows/{id}/repayments` records an amount, payment method, and
+  date against the outstanding balance
+- `DELETE /api/borrows/{id}/repayments/{repaymentId}`
+
+`GET /api/dashboard` also returns `totalBorrowed` and `outstandingBorrow`, which
+is the value shown on the dashboard's Borrows card.
+
 ## Product inventory and stock monitoring
 
 Products support create, update, and safe delete (a delete marks the catalogue

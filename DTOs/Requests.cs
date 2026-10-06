@@ -261,6 +261,29 @@ public sealed class ExpenseRequest
     [StringLength(500)] public string? AttachmentUrl { get; init; }
 }
 
+/// <summary>
+/// Manual entry of a new borrowing: the name, date, amount and payment method
+/// are all typed in by the user rather than picked from customer/order data.
+/// </summary>
+public sealed class BorrowRequest
+{
+    [Required, StringLength(180)] public string BorrowerName { get; init; } = string.Empty;
+    [Required] public DateOnly BorrowDate { get; init; } = DateOnly.FromDateTime(DateTime.UtcNow);
+    [Range(typeof(decimal), "0.01", "999999999999999")] public decimal Amount { get; init; }
+    [Required, StringLength(50)] public string PaymentMode { get; init; } = "Cash";
+    [StringLength(150)] public string? ReferenceNumber { get; init; }
+    [StringLength(2000)] public string? Notes { get; init; }
+}
+
+public sealed class BorrowRepaymentRequest
+{
+    [Range(typeof(decimal), "0.01", "999999999999999")] public decimal Amount { get; init; }
+    [Required] public DateOnly PaymentDate { get; init; } = DateOnly.FromDateTime(DateTime.UtcNow);
+    [Required, StringLength(50)] public string PaymentMode { get; init; } = "Cash";
+    [StringLength(150)] public string? ReferenceNumber { get; init; }
+    [StringLength(2000)] public string? Notes { get; init; }
+}
+
 
 public sealed class RawMaterialRequest
 {

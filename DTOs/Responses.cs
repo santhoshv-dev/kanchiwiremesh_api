@@ -293,7 +293,9 @@ public sealed record DashboardSummaryDto(
     decimal MonthlyReceived = 0m,
     decimal TotalProductsAmount = 0m,
     decimal TotalExpenses = 0m,
-    decimal MonthlyExpenses = 0m);
+    decimal MonthlyExpenses = 0m,
+    decimal TotalBorrowed = 0m,
+    decimal OutstandingBorrow = 0m);
 
 public sealed record PaymentSummaryDto(
     decimal TotalSales,
@@ -402,6 +404,40 @@ public sealed record ExpenseDto(
     string? AttachmentUrl,
     DateTime CreatedAtUtc,
     DateTime UpdatedAtUtc);
+
+public sealed record BorrowRepaymentDto(
+    Guid Id,
+    string RepaymentNumber,
+    Guid BorrowId,
+    decimal Amount,
+    DateOnly PaymentDate,
+    string PaymentMode,
+    string? ReferenceNumber,
+    string? Notes,
+    DateTime CreatedAtUtc);
+
+public sealed record BorrowDto(
+    Guid Id,
+    string BorrowNumber,
+    string BorrowerName,
+    DateOnly BorrowDate,
+    decimal Amount,
+    string PaymentMode,
+    string? ReferenceNumber,
+    string? Notes,
+    decimal TotalRepaid,
+    decimal OutstandingAmount,
+    string Status,
+    IReadOnlyList<BorrowRepaymentDto> Repayments,
+    DateTime CreatedAtUtc,
+    DateTime UpdatedAtUtc);
+
+public sealed record BorrowSummaryDto(
+    decimal TotalBorrowed,
+    decimal TotalRepaid,
+    decimal OutstandingAmount,
+    int BorrowCount,
+    int ActiveBorrowCount);
 
 public sealed record TransactionSummaryDto(
     decimal TotalIncoming,
