@@ -164,7 +164,7 @@ public sealed class DashboardControllerTests
         await database.SaveChangesAsync();
 
         var response = await new DashboardController(database)
-            .GetMonthlySales(CancellationToken.None);
+            .GetMonthlySales(cancellationToken: CancellationToken.None);
 
         var result = Assert.IsType<OkObjectResult>(response.Result);
         var breakdown = Assert.IsType<MonthlySalesBreakdownDto>(result.Value);

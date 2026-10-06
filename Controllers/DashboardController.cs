@@ -12,11 +12,11 @@ public sealed class DashboardController(KanchimeshDbContext database) : ApiContr
     [HttpGet("monthly-sales")]
     [ProducesResponseType(typeof(MonthlySalesBreakdownDto), StatusCodes.Status200OK)]
     public async Task<ActionResult<MonthlySalesBreakdownDto>> GetMonthlySales(
-        [FromQuery] int? year,
-        [FromQuery] int? month,
-        [FromQuery] DateOnly? fromDate,
-        [FromQuery] DateOnly? toDate,
-        CancellationToken cancellationToken)
+        [FromQuery] int? year = null,
+        [FromQuery] int? month = null,
+        [FromQuery] DateOnly? fromDate = null,
+        [FromQuery] DateOnly? toDate = null,
+        CancellationToken cancellationToken = default)
     {
         DateOnly startDate;
         DateOnly endDate;

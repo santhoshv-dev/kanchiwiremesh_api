@@ -21,7 +21,7 @@ public static class QuotationCalculator
         var itemTax = quotation.Items.Sum(x => x.TaxAmount);
         var effectiveTaxRate = quotation.Subtotal == 0m ? 0m : itemTax / quotation.Subtotal;
         quotation.TaxAmount = Round((quotation.Subtotal - quotation.DiscountAmount + quotation.FreightAmount) * effectiveTaxRate);
-        quotation.GrandTotal = Round(quotation.Subtotal - quotation.DiscountAmount + quotation.FreightAmount + quotation.TaxAmount);
+        quotation.GrandTotal = Math.Round(quotation.Subtotal - quotation.DiscountAmount + quotation.FreightAmount + quotation.TaxAmount, 0, MidpointRounding.AwayFromZero);
     }
 
     private static decimal Round(decimal value) => Math.Round(value, 2, MidpointRounding.AwayFromZero);

@@ -22,7 +22,7 @@ public static class OrderCalculator
         var itemTax = order.Items.Sum(x => x.TaxAmount);
         var effectiveTaxRate = order.Subtotal == 0m ? 0m : itemTax / order.Subtotal;
         order.TaxAmount = Round((order.Subtotal - order.DiscountAmount + order.FreightAmount) * effectiveTaxRate);
-        order.GrandTotal = Round(order.Subtotal - order.DiscountAmount + order.FreightAmount + order.TaxAmount);
+        order.GrandTotal = Math.Round(order.Subtotal - order.DiscountAmount + order.FreightAmount + order.TaxAmount, 0, MidpointRounding.AwayFromZero);
     }
 
     private static decimal Round(decimal value) => Math.Round(value, 2, MidpointRounding.AwayFromZero);
