@@ -763,7 +763,8 @@ public sealed class OrdersController(KanchimeshDbContext database) : ApiControll
             order.Id, order.OrderNumber, order.CustomerId, DtoMappings.DisplayCustomerName(order.Customer),
             order.Items.OrderBy(item => item.Id).Select(item => item.Description).FirstOrDefault() ?? "—",
             order.OrderDate, order.ExpectedDeliveryDate, order.Status, order.GrandTotal,
-            paid, Math.Max(order.GrandTotal - paid, 0m), order.UpdatedAtUtc);
+            paid, Math.Max(order.GrandTotal - paid, 0m), order.UpdatedAtUtc,
+            order.Customer?.GstNumber);
     }
 
     public static OrderDetailDto ToDetailDto(SalesOrder order, CompanyProfileDto? company = null)
@@ -774,7 +775,8 @@ public sealed class OrdersController(KanchimeshDbContext database) : ApiControll
             order.ExpectedDeliveryDate, order.Status, order.Notes, order.Subtotal, order.DiscountAmount,
             order.FreightAmount, order.TaxAmount, order.GstType, order.GrandTotal, summary.PaidAmount, summary.Outstanding,
             order.Items.OrderBy(item => item.Id).Select(item => item.ToDto()).ToList(),
-            order.CreatedAtUtc, order.UpdatedAtUtc, company);
+            order.CreatedAtUtc, order.UpdatedAtUtc, company,
+            order.Customer?.GstNumber);
     }
 
     private static string? Null(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();

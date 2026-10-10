@@ -181,7 +181,8 @@ public sealed record OrderSummaryDto(
     decimal GrandTotal,
     decimal PaidAmount,
     decimal Outstanding,
-    DateTime UpdatedAtUtc);
+    DateTime UpdatedAtUtc,
+    string? CustomerGstNumber = null);
 
 public sealed record MonthlySalesOrderDto(
     Guid Id,
@@ -193,7 +194,8 @@ public sealed record MonthlySalesOrderDto(
     string Status,
     string GstType,
     decimal TaxAmount,
-    decimal GrandTotal);
+    decimal GrandTotal,
+    string? CustomerGstNumber = null);
 
 public sealed record MonthlySalesBreakdownDto(
     DateOnly Month,
@@ -226,7 +228,8 @@ public sealed record OrderDetailDto(
     IReadOnlyList<OrderItemDto> Items,
     DateTime CreatedAtUtc,
     DateTime UpdatedAtUtc,
-    CompanyProfileDto? Company = null);
+    CompanyProfileDto? Company = null,
+    string? CustomerGstNumber = null);
 
 public sealed record PaymentDto(
     Guid Id,

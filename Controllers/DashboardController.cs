@@ -61,7 +61,8 @@ public sealed class DashboardController(KanchimeshDbContext database) : ApiContr
             order.Status,
             order.GstType,
             order.TaxAmount,
-            order.GrandTotal)).ToList();
+            order.GrandTotal,
+            order.Customer?.GstNumber)).ToList();
         var gstOrders = items
             .Where(order => !string.Equals(order.GstType, "None", StringComparison.OrdinalIgnoreCase))
             .ToList();

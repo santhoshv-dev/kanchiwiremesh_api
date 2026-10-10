@@ -118,6 +118,7 @@ public sealed class DashboardControllerTests
             CustomerCode = "CUS-SALES-SPLIT",
             ContactName = "Sales Split Customer",
             Phone = "9876543210",
+            GstNumber = "33ABCDE1234F1Z5",
         };
         var today = DateOnly.FromDateTime(DateTime.UtcNow);
         var currentMonth = new DateOnly(today.Year, today.Month, 1);
@@ -176,6 +177,7 @@ public sealed class DashboardControllerTests
         Assert.Equal(1, breakdown.GstOrderCount);
         Assert.Equal(1, breakdown.NonGstOrderCount);
         Assert.Equal(2, breakdown.Orders.Count);
+        Assert.Equal("33ABCDE1234F1Z5", breakdown.Orders.First().CustomerGstNumber);
     }
 
     [Fact]
