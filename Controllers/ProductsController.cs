@@ -399,6 +399,166 @@ public sealed class ProductsController(KanchimeshDbContext database) : ApiContro
         return Ok(grouped);
     }
 
+    [HttpGet("stock-history")]
+    [ProducesResponseType(typeof(PagedResult<ProductTransactionDto>), StatusCodes.Status200OK)]
+    public async Task<ActionResult<PagedResult<ProductTransactionDto>>> GetAllProductsStockHistory(
+        [FromQuery] int? year = null,
+        [FromQuery] int? month = null,
+        [FromQuery] string? category = null,
+        [FromQuery] Guid? productId = null,
+        [FromQuery] string? transactionType = null,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 50,
+        CancellationToken cancellationToken = default)
+    {
+        (page, pageSize) = NormalizePage(page, pageSize);
+
+        // Build date range filter
+        DateOnly? startDate = null;
+        DateOnly? endDate = null;
+
+        if (year.HasValue && month.HasValue)
+        {
+            startDate = new DateOnly(year.Value, month.Value, 1);
+            endDate = startDate.Value.AddMonths(1);
+        }
+        else if (year.HasValue)
+        {
+            startDate = new DateOnly(year.Value, 1, 1);
+            endDate = new DateOnly(year.Value + 1, 1, 1);
+        }
+
+        // 1. Manual product transactions
+        var manualQuery = database.ProductTransactions
+            .AsNoTracking()
+            .Include(t => t.Product)
+            .AsQueryable();
+
+        if (productId.HasValue)
+            manualQuery = manualQuery.Where(t => t.ProductId == productId.Value);
+
+        if (!string.IsNullOrWhiteSpace(category) && !category.Equals("All", StringComparison.OrdinalIgnoreCase))
+        {
+            var cat = category.Trim().ToLower();
+            manualQuery = manualQuery.Where(t => t.Product != null && t.Product.Category.ToLower() == cat);
+        }
+
+        if (!string.IsNullOrWhiteSpace(transactionType) && !transactionType.Equals("All", StringComparison.OrdinalIgnoreCase))
+        {
+            var tt = transactionType.Trim();
+            manualQuery = manualQuery.Where(t => t.TransactionType == tt);
+        }
+
+        if (startDate.HasValue)
+            manualQuery = manualQuery.Where(t => t.TransactionDate >= startDate.Value);
+        if (endDate.HasValue)
+            manualQuery = manualQuery.Where(t => t.TransactionDate < endDate.Value);
+
+        var manualTransactions = await manualQuery.ToListAsync(cancellationToken);
+
+        // 2. Sales order items (only Sales type)
+        var shouldIncludeSales = string.IsNullOrWhiteSpace(transactionType)
+            || transactionType.Equals("All", StringComparison.OrdinalIgnoreCase)
+            || transactionType.Equals("Sale", StringComparison.OrdinalIgnoreCase);
+
+        var salesItems = new List<SalesOrderItem>();
+        if (shouldIncludeSales)
+        {
+            var salesQuery = database.SalesOrderItems
+                .AsNoTracking()
+                .Where(item => item.SalesOrder.Status != "Cancelled")
+                .Include(item => item.SalesOrder)
+                    .ThenInclude(order => order.Customer)
+                .Include(item => item.SalesOrder)
+                    .ThenInclude(order => order.Payments)
+                .Include(item => item.Product)
+                .AsSplitQuery()
+                .AsQueryable();
+
+            if (productId.HasValue)
+                salesQuery = salesQuery.Where(item => item.ProductId == productId.Value);
+
+            if (!string.IsNullOrWhiteSpace(category) && !category.Equals("All", StringComparison.OrdinalIgnoreCase))
+            {
+                var cat = category.Trim().ToLower();
+                salesQuery = salesQuery.Where(item => item.Product != null && item.Product.Category.ToLower() == cat);
+            }
+
+            if (startDate.HasValue)
+                salesQuery = salesQuery.Where(item => item.SalesOrder.OrderDate >= startDate.Value);
+            if (endDate.HasValue)
+                salesQuery = salesQuery.Where(item => item.SalesOrder.OrderDate < endDate.Value);
+
+            salesItems = await salesQuery.ToListAsync(cancellationToken);
+        }
+
+        // Combine all transactions
+        var allTransactions = new List<ProductTransactionDto>();
+
+        foreach (var t in manualTransactions)
+        {
+            if (t.Product != null)
+            {
+                allTransactions.Add(t.ToDto(t.Product));
+            }
+        }
+
+        foreach (var item in salesItems)
+        {
+            if (item.Product != null)
+            {
+                allTransactions.Add(ToOrderSaleDtoStatic(item, item.Product));
+            }
+        }
+
+        // Sort newest first
+        var ordered = allTransactions
+            .OrderByDescending(t => t.TransactionDate)
+            .ThenByDescending(t => t.CreatedAtUtc)
+            .ToList();
+
+        var totalCount = ordered.Count;
+        var items = ordered.Skip((page - 1) * pageSize).Take(pageSize).ToList();
+
+        return Ok(new PagedResult<ProductTransactionDto>(items, page, pageSize, totalCount));
+    }
+
+    private static ProductTransactionDto ToOrderSaleDtoStatic(SalesOrderItem item, Product product)
+    {
+        var order = item.SalesOrder;
+        var customer = order.Customer;
+        var paidAmount = order.Payments.Where(payment => !payment.IsAdvance).Sum(payment => payment.Amount);
+        var paymentStatus = order.GrandTotal <= 0m || paidAmount >= order.GrandTotal
+            ? "Paid"
+            : paidAmount > 0m
+                ? "Partial"
+                : "Pending";
+        var notes = string.IsNullOrWhiteSpace(order.Notes)
+            ? $"Sales order {order.OrderNumber}"
+            : $"Sales order {order.OrderNumber}. {order.Notes.Trim()}";
+
+        return new ProductTransactionDto(
+            item.Id,
+            order.OrderNumber,
+            product.Id,
+            product.Name,
+            product.ProductCode,
+            "Sale",
+            DtoMappings.DisplayCustomerName(customer),
+            customer.Phone,
+            customer.City ?? customer.Address,
+            order.OrderDate,
+            item.Quantity,
+            product.Unit,
+            item.LineTotal,
+            paymentStatus,
+            notes,
+            order.CreatedAtUtc,
+            order.UpdatedAtUtc,
+            IsOrderSale: true,
+            SourceOrderId: order.Id);
+    }
+
     [HttpGet("sales-summary")]
     [ProducesResponseType(typeof(ProductSalesSummaryDto), StatusCodes.Status200OK)]
     public async Task<ActionResult<ProductSalesSummaryDto>> GetProductSalesSummary(

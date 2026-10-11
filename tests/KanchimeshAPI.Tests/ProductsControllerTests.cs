@@ -138,6 +138,67 @@ public sealed class ProductsControllerTests
         Assert.Equal(2m, requirement.ConsumptionQuantity);
     }
 
+    [Fact]
+    public async Task GetAllProductsStockHistory_FiltersByMonthCategoryAndProduct()
+    {
+        await using var database = CreateDatabase();
+        var prod1 = new Product { ProductCode = "P1", Name = "Mesh Wire", Category = "Mesh", Unit = "PCS" };
+        var prod2 = new Product { ProductCode = "P2", Name = "Roller", Category = "Roller", Unit = "PCS" };
+        database.Products.AddRange(prod1, prod2);
+        await database.SaveChangesAsync();
+
+        database.ProductTransactions.AddRange(
+            new ProductTransaction
+            {
+                ProductId = prod1.Id,
+                TransactionType = "Purchase",
+                TransactionDate = new DateOnly(2026, 10, 5),
+                Quantity = 50,
+                Amount = 5000,
+            },
+            new ProductTransaction
+            {
+                ProductId = prod2.Id,
+                TransactionType = "Purchase",
+                TransactionDate = new DateOnly(2026, 10, 8),
+                Quantity = 20,
+                Amount = 4000,
+            },
+            new ProductTransaction
+            {
+                ProductId = prod1.Id,
+                TransactionType = "Adjustment",
+                TransactionDate = new DateOnly(2026, 9, 15),
+                Quantity = 10,
+                Amount = 1000,
+            }
+        );
+        await database.SaveChangesAsync();
+
+        var controller = new ProductsController(database);
+
+        // 1. All products
+        var allRes = await controller.GetAllProductsStockHistory();
+        var allPage = Assert.IsType<PagedResult<ProductTransactionDto>>(Assert.IsType<OkObjectResult>(allRes.Result).Value);
+        Assert.Equal(3, allPage.TotalCount);
+
+        // 2. Filter by month & year (October 2026)
+        var octRes = await controller.GetAllProductsStockHistory(year: 2026, month: 10);
+        var octPage = Assert.IsType<PagedResult<ProductTransactionDto>>(Assert.IsType<OkObjectResult>(octRes.Result).Value);
+        Assert.Equal(2, octPage.TotalCount);
+
+        // 3. Filter by category (Mesh)
+        var meshRes = await controller.GetAllProductsStockHistory(category: "Mesh");
+        var meshPage = Assert.IsType<PagedResult<ProductTransactionDto>>(Assert.IsType<OkObjectResult>(meshRes.Result).Value);
+        Assert.Equal(2, meshPage.TotalCount);
+
+        // 4. Filter by specific product (prod2)
+        var p2Res = await controller.GetAllProductsStockHistory(productId: prod2.Id);
+        var p2Page = Assert.IsType<PagedResult<ProductTransactionDto>>(Assert.IsType<OkObjectResult>(p2Res.Result).Value);
+        Assert.Single(p2Page.Items);
+        Assert.Equal(prod2.Id, p2Page.Items[0].ProductId);
+    }
+
     private static KanchimeshDbContext CreateDatabase()
     {
         var options = new DbContextOptionsBuilder<KanchimeshDbContext>()
