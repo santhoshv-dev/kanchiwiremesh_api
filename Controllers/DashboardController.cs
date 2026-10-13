@@ -62,13 +62,17 @@ public sealed class DashboardController(KanchimeshDbContext database) : ApiContr
             order.GstType,
             order.TaxAmount,
             order.GrandTotal,
-            order.Customer?.GstNumber)).ToList();
+            order.Customer?.GstNumber,
+            order.Subtotal > 0 ? order.Subtotal : Math.Max(0m, order.GrandTotal - order.TaxAmount))).ToList();
         var gstOrders = items
             .Where(order => !string.Equals(order.GstType, "None", StringComparison.OrdinalIgnoreCase))
             .ToList();
         var nonGstOrders = items
             .Where(order => string.Equals(order.GstType, "None", StringComparison.OrdinalIgnoreCase))
             .ToList();
+
+        var gstSubtotal = gstOrders.Sum(order => order.Subtotal > 0 ? order.Subtotal : Math.Max(0m, order.GrandTotal - order.TaxAmount));
+        var totalSubtotal = items.Sum(order => order.Subtotal > 0 ? order.Subtotal : Math.Max(0m, order.GrandTotal - order.TaxAmount));
 
         return Ok(new MonthlySalesBreakdownDto(
             startDate,
@@ -78,7 +82,9 @@ public sealed class DashboardController(KanchimeshDbContext database) : ApiContr
             gstOrders.Sum(order => order.TaxAmount),
             gstOrders.Count,
             nonGstOrders.Count,
-            items));
+            items,
+            gstSubtotal,
+            totalSubtotal));
     }
 
 

@@ -98,6 +98,12 @@ public sealed record ProductSalesSummaryDto(
     int TotalProducts,
     IReadOnlyList<ProductSalesItemDto> Products);
 
+public sealed record ProductStockBalanceDto(
+    Guid ProductId,
+    string ProductName,
+    string ProductCode,
+    decimal OpeningStock);
+
 public sealed record InventorySummaryDto(
     Guid ProductId,
     string ProductCode,
@@ -195,7 +201,8 @@ public sealed record MonthlySalesOrderDto(
     string GstType,
     decimal TaxAmount,
     decimal GrandTotal,
-    string? CustomerGstNumber = null);
+    string? CustomerGstNumber = null,
+    decimal Subtotal = 0m);
 
 public sealed record MonthlySalesBreakdownDto(
     DateOnly Month,
@@ -205,7 +212,9 @@ public sealed record MonthlySalesBreakdownDto(
     decimal GstCollected,
     int GstOrderCount,
     int NonGstOrderCount,
-    IReadOnlyList<MonthlySalesOrderDto> Orders);
+    IReadOnlyList<MonthlySalesOrderDto> Orders,
+    decimal GstSubtotal = 0m,
+    decimal TotalSubtotal = 0m);
 
 public sealed record OrderDetailDto(
     Guid Id,

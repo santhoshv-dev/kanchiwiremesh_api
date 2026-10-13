@@ -404,6 +404,8 @@ public sealed class ProductsController(KanchimeshDbContext database) : ApiContro
     public async Task<ActionResult<PagedResult<ProductTransactionDto>>> GetAllProductsStockHistory(
         [FromQuery] int? year = null,
         [FromQuery] int? month = null,
+        [FromQuery] DateOnly? fromDate = null,
+        [FromQuery] DateOnly? toDate = null,
         [FromQuery] string? category = null,
         [FromQuery] Guid? productId = null,
         [FromQuery] string? transactionType = null,
@@ -417,7 +419,20 @@ public sealed class ProductsController(KanchimeshDbContext database) : ApiContro
         DateOnly? startDate = null;
         DateOnly? endDate = null;
 
-        if (year.HasValue && month.HasValue)
+        if (fromDate.HasValue && toDate.HasValue)
+        {
+            startDate = fromDate.Value;
+            endDate = toDate.Value.AddDays(1);
+        }
+        else if (fromDate.HasValue)
+        {
+            startDate = fromDate.Value;
+        }
+        else if (toDate.HasValue)
+        {
+            endDate = toDate.Value.AddDays(1);
+        }
+        else if (year.HasValue && month.HasValue)
         {
             startDate = new DateOnly(year.Value, month.Value, 1);
             endDate = startDate.Value.AddMonths(1);
@@ -521,6 +536,78 @@ public sealed class ProductsController(KanchimeshDbContext database) : ApiContro
         var items = ordered.Skip((page - 1) * pageSize).Take(pageSize).ToList();
 
         return Ok(new PagedResult<ProductTransactionDto>(items, page, pageSize, totalCount));
+    }
+
+    [HttpGet("stock-balance")]
+    [ProducesResponseType(typeof(List<ProductStockBalanceDto>), StatusCodes.Status200OK)]
+    public async Task<ActionResult<List<ProductStockBalanceDto>>> GetStockBalance(
+        [FromQuery] DateOnly beforeDate,
+        [FromQuery] string? category = null,
+        [FromQuery] Guid? productId = null,
+        CancellationToken cancellationToken = default)
+    {
+        var productsQuery = database.Products.AsNoTracking().AsQueryable();
+        if (productId.HasValue)
+            productsQuery = productsQuery.Where(p => p.Id == productId.Value);
+        if (!string.IsNullOrWhiteSpace(category) && !category.Equals("All", StringComparison.OrdinalIgnoreCase))
+        {
+            var cat = category.Trim().ToLower();
+            productsQuery = productsQuery.Where(p => p.Category.ToLower() == cat);
+        }
+
+        var products = await productsQuery.ToListAsync(cancellationToken);
+        if (products.Count == 0)
+            return Ok(new List<ProductStockBalanceDto>());
+
+        var productIds = products.Select(p => p.Id).ToList();
+
+        // Manual transactions on or after beforeDate
+        var manualTransactionsAfter = await database.ProductTransactions
+            .AsNoTracking()
+            .Where(t => productIds.Contains(t.ProductId) && t.TransactionDate >= beforeDate)
+            .ToListAsync(cancellationToken);
+
+        // Sales order items on or after beforeDate (excluding cancelled orders)
+        var salesItemsAfter = await database.SalesOrderItems
+            .AsNoTracking()
+            .Where(soi => soi.ProductId.HasValue &&
+                          productIds.Contains(soi.ProductId.Value) &&
+                          soi.SalesOrder.Status != "Cancelled" &&
+                          soi.SalesOrder.OrderDate >= beforeDate)
+            .Include(soi => soi.SalesOrder)
+            .ToListAsync(cancellationToken);
+
+        var manualGrouped = manualTransactionsAfter
+            .GroupBy(t => t.ProductId)
+            .ToDictionary(
+                g => g.Key,
+                g => g.Sum(t => t.TransactionType switch
+                {
+                    "Purchase" or "Return" or "Adjustment" => t.Quantity,
+                    "Sale" => -t.Quantity,
+                    _ => 0m
+                }));
+
+        var salesGrouped = salesItemsAfter
+            .Where(soi => soi.ProductId.HasValue)
+            .GroupBy(soi => soi.ProductId!.Value)
+            .ToDictionary(g => g.Key, g => g.Sum(soi => soi.Quantity));
+
+        var results = new List<ProductStockBalanceDto>();
+        foreach (var p in products)
+        {
+            var netManualAfter = manualGrouped.GetValueOrDefault(p.Id, 0m);
+            var netSoldAfter = salesGrouped.GetValueOrDefault(p.Id, 0m);
+            // Stock at beforeDate is current QuantityOnHand minus net movements since beforeDate
+            var openingStock = p.QuantityOnHand - (netManualAfter - netSoldAfter);
+            if (openingStock < 0m)
+            {
+                openingStock = 0m;
+            }
+            results.Add(new ProductStockBalanceDto(p.Id, p.Name, p.ProductCode, openingStock));
+        }
+
+        return Ok(results);
     }
 
     private static ProductTransactionDto ToOrderSaleDtoStatic(SalesOrderItem item, Product product)

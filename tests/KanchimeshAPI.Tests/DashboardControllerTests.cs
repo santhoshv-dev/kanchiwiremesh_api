@@ -174,10 +174,12 @@ public sealed class DashboardControllerTests
         Assert.Equal(1_180m, breakdown.GstSales);
         Assert.Equal(500m, breakdown.NonGstSales);
         Assert.Equal(180m, breakdown.GstCollected);
+        Assert.Equal(1_000m, breakdown.GstSubtotal);
         Assert.Equal(1, breakdown.GstOrderCount);
         Assert.Equal(1, breakdown.NonGstOrderCount);
         Assert.Equal(2, breakdown.Orders.Count);
         Assert.Equal("33ABCDE1234F1Z5", breakdown.Orders.First().CustomerGstNumber);
+        Assert.Equal(1_000m, breakdown.Orders.First().Subtotal);
     }
 
     [Fact]
