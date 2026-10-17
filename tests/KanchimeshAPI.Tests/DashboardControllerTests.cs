@@ -230,6 +230,47 @@ public sealed class DashboardControllerTests
         Assert.Equal(1, welded.ProductCount);
     }
 
+    [Fact]
+    public async Task ProductsController_GetCategorySummary_UsesQuantityOnHandNotRawMaterialCapacity()
+    {
+        await using var database = CreateDatabase();
+        var rawMaterial = new RawMaterial
+        {
+            Name = "GI Wire",
+            Unit = "kg",
+            TotalStock = 1000m,
+            UsedStock = 0m,
+            IsActive = true,
+        };
+        database.RawMaterials.Add(rawMaterial);
+
+        var product = new Product
+        {
+            ProductCode = "P-RAW",
+            Name = "Wire Mesh with Raw Material",
+            Category = "Crimped Mesh",
+            Rate = 100m,
+            QuantityOnHand = 5m,
+            IsActive = true,
+        };
+        product.RawMaterials.Add(new ProductRawMaterial
+        {
+            RawMaterial = rawMaterial,
+            ConsumptionQuantity = 10m, // 1000 / 10 = 100 available pieces capacity
+        });
+        database.Products.Add(product);
+        await database.SaveChangesAsync();
+
+        var response = await new ProductsController(database).GetCategorySummary(CancellationToken.None);
+        var result = Assert.IsType<OkObjectResult>(response.Result);
+        var categories = Assert.IsAssignableFrom<IReadOnlyList<ProductCategorySummaryDto>>(result.Value);
+
+        var crimped = categories.First(c => c.Category == "Crimped Mesh");
+        // Stock report must reflect physical stock on hand (5 * 100 = 500), not raw material capacity (100 * 100 = 10000)
+        Assert.Equal(500m, crimped.TotalAmount);
+        Assert.Equal(5m, crimped.TotalPieces);
+    }
+
     private static SalesOrder NewOrder(Customer customer, string number, string status) => new()
     {
         OrderNumber = number,

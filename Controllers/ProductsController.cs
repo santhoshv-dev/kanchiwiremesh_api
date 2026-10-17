@@ -389,8 +389,8 @@ public sealed class ProductsController(KanchimeshDbContext database) : ApiContro
             .GroupBy(p => string.IsNullOrWhiteSpace(p.Category) ? "Uncategorized" : p.Category.Trim(), StringComparer.OrdinalIgnoreCase)
             .Select(g => new ProductCategorySummaryDto(
                 g.Key,
-                g.Sum(p => p.TotalAmount),
-                g.Sum(p => p.Pieces),
+                g.Sum(p => p.QuantityOnHand * p.Rate),
+                g.Sum(p => p.QuantityOnHand),
                 g.Count(),
                 g.ToList()))
             .OrderByDescending(c => c.TotalAmount)

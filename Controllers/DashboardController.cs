@@ -167,7 +167,7 @@ public sealed class DashboardController(KanchimeshDbContext database) : ApiContr
             .Include(product => product.RawMaterials)
             .ThenInclude(prm => prm.RawMaterial)
             .ToListAsync(cancellationToken);
-        var totalProductsAmount = activeProducts.Sum(product => product.ToDto().TotalAmount);
+        var totalProductsAmount = activeProducts.Sum(product => product.QuantityOnHand * product.Rate);
 
         var totalGeneralExpenses = await database.Expenses
             .SumAsync(expense => (decimal?)expense.Amount, cancellationToken) ?? 0m;
