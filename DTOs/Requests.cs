@@ -167,6 +167,11 @@ public sealed class OrderInvoiceNumberRequest
     [Required, StringLength(64)] public string InvoiceNumber { get; init; } = string.Empty;
 }
 
+public sealed class OrderInvoiceDateRequest
+{
+    [Required] public DateOnly InvoiceDate { get; init; } = DateOnly.FromDateTime(DateTime.UtcNow);
+}
+
 public sealed class PaymentRequest
 {
     // customerName/orderId/date are compatibility aliases for the Flutter wireframe client.

@@ -1,4 +1,4 @@
-using System.Data;
+﻿using System.Data;
 using KanchimeshAPI.Data;
 using KanchimeshAPI.DTOs;
 using KanchimeshAPI.Models;
@@ -313,6 +313,26 @@ public sealed class OrdersController(KanchimeshDbContext database) : ApiControll
         return Ok(ToDetailDto(order));
     }
 
+
+
+    [HttpPatch("{id:guid}/invoice-date")]
+    [ProducesResponseType(typeof(OrderDetailDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<OrderDetailDto>> UpdateInvoiceDate(
+        Guid id,
+        OrderInvoiceDateRequest request,
+        CancellationToken cancellationToken)
+    {
+        var order = await GetOrderGraph(id, tracking: true, cancellationToken);
+        if (order is null)
+        {
+            return NotFound();
+        }
+
+        order.OrderDate = request.InvoiceDate;
+        await database.SaveChangesAsync(cancellationToken);
+        return Ok(ToDetailDto(order));
+    }
 
     [HttpDelete("{id:guid}")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
@@ -761,7 +781,7 @@ public sealed class OrdersController(KanchimeshDbContext database) : ApiControll
         var paid = order.Payments.Where(payment => !payment.IsAdvance).Sum(payment => payment.Amount);
         return new OrderSummaryDto(
             order.Id, order.OrderNumber, order.CustomerId, DtoMappings.DisplayCustomerName(order.Customer),
-            order.Items.OrderBy(item => item.Id).Select(item => item.Description).FirstOrDefault() ?? "—",
+            order.Items.OrderBy(item => item.Id).Select(item => item.Description).FirstOrDefault() ?? "â€”",
             order.OrderDate, order.ExpectedDeliveryDate, order.Status, order.GrandTotal,
             paid, Math.Max(order.GrandTotal - paid, 0m), order.UpdatedAtUtc,
             order.Customer?.GstNumber);
