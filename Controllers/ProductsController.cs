@@ -407,6 +407,7 @@ public sealed class ProductsController(KanchimeshDbContext database) : ApiContro
         [FromQuery] DateOnly? fromDate = null,
         [FromQuery] DateOnly? toDate = null,
         [FromQuery] string? category = null,
+        [FromQuery] string? categories = null,
         [FromQuery] Guid? productId = null,
         [FromQuery] string? transactionType = null,
         [FromQuery] int page = 1,
@@ -452,10 +453,10 @@ public sealed class ProductsController(KanchimeshDbContext database) : ApiContro
         if (productId.HasValue)
             manualQuery = manualQuery.Where(t => t.ProductId == productId.Value);
 
-        if (!string.IsNullOrWhiteSpace(category) && !category.Equals("All", StringComparison.OrdinalIgnoreCase))
+        var categoryFilters = ParseCategoryFilters(category, categories);
+        if (categoryFilters.Count > 0)
         {
-            var cat = category.Trim().ToLower();
-            manualQuery = manualQuery.Where(t => t.Product != null && t.Product.Category.ToLower() == cat);
+            manualQuery = manualQuery.Where(t => t.Product != null && categoryFilters.Contains(t.Product.Category.ToLower()));
         }
 
         if (!string.IsNullOrWhiteSpace(transactionType) && !transactionType.Equals("All", StringComparison.OrdinalIgnoreCase))
@@ -493,10 +494,9 @@ public sealed class ProductsController(KanchimeshDbContext database) : ApiContro
             if (productId.HasValue)
                 salesQuery = salesQuery.Where(item => item.ProductId == productId.Value);
 
-            if (!string.IsNullOrWhiteSpace(category) && !category.Equals("All", StringComparison.OrdinalIgnoreCase))
+            if (categoryFilters.Count > 0)
             {
-                var cat = category.Trim().ToLower();
-                salesQuery = salesQuery.Where(item => item.Product != null && item.Product.Category.ToLower() == cat);
+                salesQuery = salesQuery.Where(item => item.Product != null && categoryFilters.Contains(item.Product.Category.ToLower()));
             }
 
             if (startDate.HasValue)
@@ -543,16 +543,17 @@ public sealed class ProductsController(KanchimeshDbContext database) : ApiContro
     public async Task<ActionResult<List<ProductStockBalanceDto>>> GetStockBalance(
         [FromQuery] DateOnly beforeDate,
         [FromQuery] string? category = null,
+        [FromQuery] string? categories = null,
         [FromQuery] Guid? productId = null,
         CancellationToken cancellationToken = default)
     {
         var productsQuery = database.Products.AsNoTracking().AsQueryable();
         if (productId.HasValue)
             productsQuery = productsQuery.Where(p => p.Id == productId.Value);
-        if (!string.IsNullOrWhiteSpace(category) && !category.Equals("All", StringComparison.OrdinalIgnoreCase))
+        var categoryFilters = ParseCategoryFilters(category, categories);
+        if (categoryFilters.Count > 0)
         {
-            var cat = category.Trim().ToLower();
-            productsQuery = productsQuery.Where(p => p.Category.ToLower() == cat);
+            productsQuery = productsQuery.Where(p => categoryFilters.Contains(p.Category.ToLower()));
         }
 
         var products = await productsQuery.ToListAsync(cancellationToken);
@@ -609,6 +610,14 @@ public sealed class ProductsController(KanchimeshDbContext database) : ApiContro
 
         return Ok(results);
     }
+
+    private static List<string> ParseCategoryFilters(string? category, string? categories) =>
+        new[] { category, categories }
+            .Where(value => !string.IsNullOrWhiteSpace(value) && !value.Equals("All", StringComparison.OrdinalIgnoreCase))
+            .SelectMany(value => value!.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            .Select(value => value.ToLowerInvariant())
+            .Distinct()
+            .ToList();
 
     private static ProductTransactionDto ToOrderSaleDtoStatic(SalesOrderItem item, Product product)
     {

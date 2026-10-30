@@ -192,7 +192,12 @@ public sealed class ProductsControllerTests
         var meshPage = Assert.IsType<PagedResult<ProductTransactionDto>>(Assert.IsType<OkObjectResult>(meshRes.Result).Value);
         Assert.Equal(2, meshPage.TotalCount);
 
-        // 4. Filter by specific product (prod2)
+        // 4. Multiple categories can be selected in one report request.
+        var multiCategoryRes = await controller.GetAllProductsStockHistory(categories: "Mesh,Roller");
+        var multiCategoryPage = Assert.IsType<PagedResult<ProductTransactionDto>>(Assert.IsType<OkObjectResult>(multiCategoryRes.Result).Value);
+        Assert.Equal(3, multiCategoryPage.TotalCount);
+
+        // 5. Filter by specific product (prod2)
         var p2Res = await controller.GetAllProductsStockHistory(productId: prod2.Id);
         var p2Page = Assert.IsType<PagedResult<ProductTransactionDto>>(Assert.IsType<OkObjectResult>(p2Res.Result).Value);
         Assert.Single(p2Page.Items);
