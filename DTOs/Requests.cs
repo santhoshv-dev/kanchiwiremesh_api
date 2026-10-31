@@ -172,6 +172,22 @@ public sealed class OrderInvoiceDateRequest
     [Required] public DateOnly InvoiceDate { get; init; } = DateOnly.FromDateTime(DateTime.UtcNow);
 }
 
+public sealed class OrderInvoiceDispatchDetailsRequest
+{
+    [StringLength(500)] public string? DeliveryNote { get; init; }
+    [StringLength(500)] public string? ModeOfPayment { get; init; }
+    [StringLength(200)] public string? ReferenceNo { get; init; }
+    [StringLength(500)] public string? OtherReferences { get; init; }
+    [StringLength(200)] public string? BuyersOrderNo { get; init; }
+    [StringLength(100)] public string? BuyersOrderDate { get; init; }
+    [StringLength(200)] public string? DispatchDocNo { get; init; }
+    [StringLength(100)] public string? DeliveryNoteDate { get; init; }
+    [StringLength(200)] public string? DispatchedThrough { get; init; }
+    [StringLength(200)] public string? Destination { get; init; }
+    [StringLength(200)] public string? BillOfLading { get; init; }
+    [StringLength(100)] public string? MotorVehicleNo { get; init; }
+}
+
 public sealed class PaymentRequest
 {
     // customerName/orderId/date are compatibility aliases for the Flutter wireframe client.

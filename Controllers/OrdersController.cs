@@ -334,6 +334,37 @@ public sealed class OrdersController(KanchimeshDbContext database) : ApiControll
         return Ok(ToDetailDto(order));
     }
 
+    [HttpPatch("{id:guid}/invoice-dispatch-details")]
+    [ProducesResponseType(typeof(OrderDetailDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<OrderDetailDto>> UpdateInvoiceDispatchDetails(
+        Guid id,
+        OrderInvoiceDispatchDetailsRequest request,
+        CancellationToken cancellationToken)
+    {
+        var order = await GetOrderGraph(id, tracking: true, cancellationToken);
+        if (order is null)
+        {
+            return NotFound();
+        }
+
+        order.DeliveryNote = Null(request.DeliveryNote);
+        order.ModeOfPayment = Null(request.ModeOfPayment);
+        order.ReferenceNo = Null(request.ReferenceNo);
+        order.OtherReferences = Null(request.OtherReferences);
+        order.BuyersOrderNo = Null(request.BuyersOrderNo);
+        order.BuyersOrderDate = Null(request.BuyersOrderDate);
+        order.DispatchDocNo = Null(request.DispatchDocNo);
+        order.DeliveryNoteDate = Null(request.DeliveryNoteDate);
+        order.DispatchedThrough = Null(request.DispatchedThrough);
+        order.Destination = Null(request.Destination);
+        order.BillOfLading = Null(request.BillOfLading);
+        order.MotorVehicleNo = Null(request.MotorVehicleNo);
+
+        await database.SaveChangesAsync(cancellationToken);
+        return Ok(ToDetailDto(order));
+    }
+
     [HttpDelete("{id:guid}")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -796,7 +827,20 @@ public sealed class OrdersController(KanchimeshDbContext database) : ApiControll
             order.FreightAmount, order.TaxAmount, order.GstType, order.GrandTotal, summary.PaidAmount, summary.Outstanding,
             order.Items.OrderBy(item => item.Id).Select(item => item.ToDto()).ToList(),
             order.CreatedAtUtc, order.UpdatedAtUtc, company,
-            order.Customer?.GstNumber);
+            order.Customer?.GstNumber,
+            new InvoiceDispatchDetailsDto(
+                order.DeliveryNote ?? string.Empty,
+                order.ModeOfPayment ?? string.Empty,
+                order.ReferenceNo ?? string.Empty,
+                order.OtherReferences ?? string.Empty,
+                order.BuyersOrderNo ?? string.Empty,
+                order.BuyersOrderDate ?? string.Empty,
+                order.DispatchDocNo ?? string.Empty,
+                order.DeliveryNoteDate ?? string.Empty,
+                order.DispatchedThrough ?? string.Empty,
+                order.Destination ?? string.Empty,
+                order.BillOfLading ?? string.Empty,
+                order.MotorVehicleNo ?? string.Empty));
     }
 
     private static string? Null(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();

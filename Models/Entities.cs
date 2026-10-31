@@ -168,6 +168,18 @@ public sealed class SalesOrder : AuditableEntity
     public DateOnly? ExpectedDeliveryDate { get; set; }
     public string Status { get; set; } = "Pending";
     public string? Notes { get; set; }
+    public string? DeliveryNote { get; set; }
+    public string? ModeOfPayment { get; set; }
+    public string? ReferenceNo { get; set; }
+    public string? OtherReferences { get; set; }
+    public string? BuyersOrderNo { get; set; }
+    public string? BuyersOrderDate { get; set; }
+    public string? DispatchDocNo { get; set; }
+    public string? DeliveryNoteDate { get; set; }
+    public string? DispatchedThrough { get; set; }
+    public string? Destination { get; set; }
+    public string? BillOfLading { get; set; }
+    public string? MotorVehicleNo { get; set; }
     public decimal Subtotal { get; set; }
     public decimal DiscountAmount { get; set; }
     public decimal FreightAmount { get; set; }

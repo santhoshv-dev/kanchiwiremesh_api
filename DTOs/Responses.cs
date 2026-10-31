@@ -216,6 +216,20 @@ public sealed record MonthlySalesBreakdownDto(
     decimal GstSubtotal = 0m,
     decimal TotalSubtotal = 0m);
 
+public sealed record InvoiceDispatchDetailsDto(
+    string DeliveryNote,
+    string ModeOfPayment,
+    string ReferenceNo,
+    string OtherReferences,
+    string BuyersOrderNo,
+    string BuyersOrderDate,
+    string DispatchDocNo,
+    string DeliveryNoteDate,
+    string DispatchedThrough,
+    string Destination,
+    string BillOfLading,
+    string MotorVehicleNo);
+
 public sealed record OrderDetailDto(
     Guid Id,
     string OrderNumber,
@@ -238,7 +252,8 @@ public sealed record OrderDetailDto(
     DateTime CreatedAtUtc,
     DateTime UpdatedAtUtc,
     CompanyProfileDto? Company = null,
-    string? CustomerGstNumber = null);
+    string? CustomerGstNumber = null,
+    InvoiceDispatchDetailsDto? DispatchDetails = null);
 
 public sealed record PaymentDto(
     Guid Id,
