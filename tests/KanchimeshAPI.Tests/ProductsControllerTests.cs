@@ -363,6 +363,40 @@ public sealed class ProductsControllerTests
         Assert.Equal(100m, prod.QuantityOnHand);
     }
 
+    [Fact]
+    public async Task GetStockBalance_ReturnsTheActualHistoricalBalanceWithoutClamping()
+    {
+        await using var database = CreateDatabase();
+        var product = new Product
+        {
+            ProductCode = "P1",
+            Name = "Wire Mesh",
+            Category = "Mesh",
+            Unit = "PCS",
+            QuantityOnHand = 0m,
+        };
+        database.Products.Add(product);
+        await database.SaveChangesAsync();
+
+        database.ProductTransactions.Add(new ProductTransaction
+        {
+            ProductId = product.Id,
+            TransactionType = "Purchase",
+            TransactionDate = new DateOnly(2026, 10, 2),
+            Quantity = 10m,
+        });
+        await database.SaveChangesAsync();
+
+        var controller = new ProductsController(database);
+
+        var result = await controller.GetStockBalance(
+            beforeDate: new DateOnly(2026, 10, 1));
+
+        var balances = Assert.IsType<List<ProductStockBalanceDto>>(
+            Assert.IsType<OkObjectResult>(result.Result).Value);
+        Assert.Equal(-10m, Assert.Single(balances).OpeningStock);
+    }
+
     private static async Task<decimal> GetOpeningStock(ProductsController controller, DateOnly beforeDate)
     {
         var result = await controller.GetStockBalance(beforeDate: beforeDate);

@@ -601,10 +601,6 @@ public sealed class ProductsController(KanchimeshDbContext database) : ApiContro
             var netSoldAfter = salesGrouped.GetValueOrDefault(p.Id, 0m);
             // Stock at beforeDate is current QuantityOnHand minus net movements since beforeDate
             var openingStock = p.QuantityOnHand - (netManualAfter - netSoldAfter);
-            if (openingStock < 0m)
-            {
-                openingStock = 0m;
-            }
             results.Add(new ProductStockBalanceDto(p.Id, p.Name, p.ProductCode, openingStock));
         }
 
