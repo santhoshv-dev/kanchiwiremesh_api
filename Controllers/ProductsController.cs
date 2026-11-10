@@ -448,6 +448,10 @@ public sealed class ProductsController(KanchimeshDbContext database) : ApiContro
         var manualQuery = database.ProductTransactions
             .AsNoTracking()
             .Include(t => t.Product)
+            // The product stock/valuation report lists active catalogue items.
+            // Apply the same scope here so its closing quantities reconcile
+            // with the all-products stock-history report.
+            .Where(t => t.Product != null && t.Product.IsActive)
             .AsQueryable();
 
         if (productId.HasValue)
@@ -482,7 +486,8 @@ public sealed class ProductsController(KanchimeshDbContext database) : ApiContro
         {
             var salesQuery = database.SalesOrderItems
                 .AsNoTracking()
-                .Where(item => item.SalesOrder.Status != "Cancelled")
+                .Where(item => item.SalesOrder.Status != "Cancelled" &&
+                               item.Product != null && item.Product.IsActive)
                 .Include(item => item.SalesOrder)
                     .ThenInclude(order => order.Customer)
                 .Include(item => item.SalesOrder)
@@ -547,7 +552,12 @@ public sealed class ProductsController(KanchimeshDbContext database) : ApiContro
         [FromQuery] Guid? productId = null,
         CancellationToken cancellationToken = default)
     {
-        var productsQuery = database.Products.AsNoTracking().AsQueryable();
+        // Keep opening balances in the same active-product scope as the
+        // product stock report and the stock-history movement query.
+        var productsQuery = database.Products
+            .AsNoTracking()
+            .Where(product => product.IsActive)
+            .AsQueryable();
         if (productId.HasValue)
             productsQuery = productsQuery.Where(p => p.Id == productId.Value);
         var categoryFilters = ParseCategoryFilters(category, categories);
